@@ -1,0 +1,186 @@
+#!/bin/bash
+
+# @file     makeTests
+# @brief    Скрипт проведения тестов для проверки утилиты jls
+
+#
+# Константы
+#
+
+# @brief    Директория скрипта
+readonly COMMON_SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+
+# @brief    Название скрипта
+readonly COMMON_SCRIPT_NAME="$(basename "$0")"
+
+# @brief    Директория с тестовым окружением
+readonly COMMON_TESTS_DIR="$COMMON_SCRIPT_DIR/../tests"
+
+#
+# Общие переменные
+#
+
+# @brief    Флаг наличия valgrind в системе
+COMMON_IS_VALGRIND_EXISTS=0
+
+# @brief    Список тестов
+COMMON_TESTS_LIST=()
+
+#
+# Функции
+#
+
+# @brief    Точка входа в скрипт
+function main()
+{
+    if ! prepare
+    then
+        return 1
+    fi
+
+    local TEST=""
+    for TEST in "${COMMON_TESTS_LIST[@]}"
+    do
+        performCompareTest "$TEST"
+
+        if [ $COMMON_IS_VALGRIND_EXISTS -eq 1 ]
+        then
+            performMemoryLeakTest "$TEST"
+        fi
+    done
+
+    return 0
+}
+
+# @brief    Функция подготовки рабочего окружения
+# @details  Данная функция выполняет проверку существования тестовой среды,
+#               проверку наличия valgrind и
+#               формирует список тестов в переменной COMMON_TESTS_LIST 
+# @return   Возвращает 0 в случае успешной подготовки рабочего окружения.
+#               В противном случае, возвращет 1
+function prepare()
+{
+    if ! [ -d "$COMMON_TESTS_DIR" ]
+    then
+        echo -e "Test environment doesn't exist! Use:\n\tmake testEnv"
+        return 1
+    fi
+
+    local TEST=""
+    COMMON_TESTS_LIST=()
+    for TEST in "$COMMON_TESTS_DIR/"*
+    do
+        if [ -d "$TEST" ]
+        then
+            COMMON_TESTS_LIST+=("$(basename "$TEST")")
+        fi
+    done
+
+    if [ ${#COMMON_TESTS_LIST[@]} == 0 ]
+    then
+        echo "No tests found!"
+        return 1
+    fi
+
+    if command -v valgrind >> /dev/null 2>&1
+    then
+        COMMON_IS_VALGRIND_EXISTS=1
+    fi
+
+    return 0
+}
+
+# @brief    Функция выполнения теста, сравнивающего вывод jls и ls -l
+# @details  Данная функция выполняет: <br>
+#               - Запуск jls   с ARG в качестве аргумента и записывает вывод в COMMON_TESTS_DIR/ARG.jls <br>
+#               - Запуск ls -l с ARG в качестве аргумента и записывает вывод в COMMON_TESTS_DIR/ARG.ls  <br>
+#               - Запуск diff COMMON_TESTS_DIR/ARG.jls COMMON_TESTS_DIR/ARG.ls и записывает вывод в COMMON_TESTS_DIR/ARG.diff <br>
+# @param    ARG Аргумент запуска
+# @return   Возвращает 0, если вывод jls и ls одинаковы.
+#               В противном случае, возвращает 1
+function performCompareTest()
+{
+    echo -n "Performing ${TEST}Compare test... "
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция выполнения теста на утечки памяти
+# @details  Данная функция выполняет проверку наличия valgrind в системе, 
+#               запуск jls с ARG в качестве аргумента при помощи valgrind и 
+#               записывает вывод в COMMON_TESTS_DIR/ARG.valgrind
+# @param    ARG Аргумент запуска
+# @return   Возвращает 0, если valgrind не обнаружил утечек памяти у jls.
+#               В противном случае, возвращает 1
+function performMemoryLeakTest()
+{
+    if [ $COMMON_IS_VALGRIND_EXISTS -eq 0 ]
+    then
+        return 1
+    fi
+
+    echo -n "Performing ${TEST}MemoryLeak test... "
+
+    echo "Done"
+
+    return 0
+}
+
+#
+# Точка входа в скрипт
+#
+
+main
+exit $?
+
+# переаботка с Cmake
+
+#execute_process(COMMAND bash -c "${CMAKE_SOURCE_DIR}/scripts/makeTestEnv")
+#
+## Получение списка директорий для тестирования
+#file(GLOB TEST_ENTITIES RELATIVE "${CMAKE_SOURCE_DIR}/tests" "${CMAKE_SOURCE_DIR}/tests/*")
+#set(TEST_ARGS "")
+#foreach(DIR ${TEST_ENTITIES})
+#    if (IS_DIRECTORY "${DIR}")
+#        list(APPEND TEST_ARGS "${DIR}")
+#    endif()
+#endforeach()
+#list(APPEND TEST_ARGS "")
+#list(APPEND TEST_ARGS "./${PROJECT_NAME}")
+#list(APPEND TEST_ARGS "/")
+#
+## Создание тестов
+#foreach(TEST_NAME "${TEST_ARGS}")
+#    set(TEST_DIR  "${CMAKE_SOURCE_DIR}/tests/${TEST_NAME}")
+#
+#    set(TEST_NAME_COMPARE "${TEST_NAME}Compare")
+#    set(OUT_JLS           "${TEST_DIR}/${TEST_NAME_COMPARE}.jls")
+#    set(OUT_LS            "${TEST_DIR}/${TEST_NAME_COMPARE}.ls")
+#
+#    add_test(
+#        NAME "${TEST_NAME_COMPARE}"
+#        COMMAND bash -c
+#        "
+#        LC_ALL=C
+#        set -e
+#        ./${PROJECT_NAME} \"${TEST_DIR}\" > \"${OUT_JLS}\"
+#        ls   -l           \"${TEST_DIR}\" > \"${OUT_LS}\"
+#        diff -q           \"${OUT_JLS}\"    \"${OUT_LS}\"
+#        "
+#    )
+#
+#    if (VALGRIND)
+#        set(TEST_NAME_MEMORY "${TEST_NAME}MemoryLeaks")
+#        set(OUT_VALGRIND     "${TEST_DIR}/${TEST_NAME_MEMORY}.valgrind")
+#        set(TEST_MEMORY_COMMAND "${VALGRIND} --leak-check=full --error-exitcode=1 --log-file=${OUT_VALGRIND} ./${PROJECT_NAME}")
+#        add_test(
+#            NAME "${TEST_NAME_MEMORY}" 
+#            COMMAND bash -c 
+#            "
+#            ${TEST_MEMORY_COMMAND} \"${TEST_DIR}\"
+#            "
+#        )
+#    endif()
+#endforeach()

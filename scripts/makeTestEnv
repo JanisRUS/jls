@@ -1,0 +1,811 @@
+#!/bin/bash
+
+# @file     makeTestEnv
+# @brief    Скрипт создания тестовой среды для проверки утилиты jls
+# @warning  Для создания некоторых тестов необходимо наличие root прав
+
+#
+# Константы
+#
+
+# @brief    Директория скрипта
+readonly COMMON_SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+
+# @brief    Название скрипта
+readonly COMMON_SCRIPT_NAME="$(basename "$0")"
+
+# @brief    Директория с тестовым окружением
+readonly COMMON_TESTS_DIR="$COMMON_SCRIPT_DIR/../tests"
+
+# @brief    Лог-файл
+readonly COMMON_LOG="/tmp/$COMMON_SCRIPT_NAME.log"
+
+# @brief    Список тестов
+readonly COMMON_TESTS_LIST=(SymlinksWithSpaces
+                            DifferentAccess
+                            DifferentUIDGID
+                            RussianSymbols
+                            DifferentTypes
+                            EditTimeFuture
+                            SymlinksBroken
+                            BigFilesList
+                            EditTimePast
+                            WithSpaces
+                            OneFileDir
+                            EmptyDir)
+
+#
+# Функции
+#
+
+# @brief    Основная функция скрипта
+# @details  Данная функция выполняет вызов prepare() и
+#               последовательную генерацию новой в соответствии со списком COMMON_TESTS_LIST
+# @return   Возвращает 0 в случае успешного создания тестовой среды.
+#               В противном случае, возвращет 1
+function main()
+{
+    if ! prepare
+    then
+        return 1
+    fi
+
+    local TEST=""
+    for TEST in "${COMMON_TESTS_LIST[@]}"
+    do
+        if ! eval "makeTest$TEST"
+        then
+            printDetails
+            return 1
+        fi
+    done
+
+    if ! makeTestMix
+    then
+        printDetails
+        return 1
+    fi
+
+    return 0
+}
+
+# @brief    Функция подготовки рабочего окружения
+# @details  Данная функция выполняет проверку пользователя, запустившего скрипт,
+#               инициализацию лог-файла, удаление существующей тестовой среды и 
+#               создание пустой директории COMMON_TESTS_DIR
+# @return   Возвращает 0 в случае успешной подготовки рабочего окружения.
+#               В противном случае, возвращет 1
+function prepare()
+{
+    if [[ $EUID -ne 0 ]]
+    then
+        echo "Run this script as root!"
+        exit 1
+    fi
+
+    if ! truncate -s 0 "$COMMON_LOG"
+    then
+        echo "Failed to truncate $COMMON_LOG!"
+    fi
+
+    if [ -d "$COMMON_TESTS_DIR" ]
+    then
+        echo "Clearing existing test environment..."
+        rm -r "$COMMON_TESTS_DIR" >> "$COMMON_LOG" 2>&1
+    fi
+
+    if ! mkdir -p "$COMMON_TESTS_DIR" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR"
+        printDetails
+        return 1
+    fi
+
+    if ! chown "$(logname)":"$(logname)" "$COMMON_TESTS_DIR" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to change owner of $COMMON_TESTS_DIR"
+        printDetails
+        return 1
+    fi
+
+    return 0
+}
+
+# @brief    Функция вывода сообщения с командой для получения деталей об ошибке
+function printDetails()
+{
+    echo -e "Details:\n\tcat $COMMON_LOG"
+}
+
+#
+# Функции создания тестов
+#
+
+# @brief    Функция создания теста "Смешанный"
+# @details  Данная функция выполняет создание директории с названием Mix
+#               и копирование в нее содержимого всех остальных тестов, кроме EmptyDir
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestMix()
+{
+    local TEST_NAME="Mix"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local TEST=""
+    for TEST in "${COMMON_TESTS_LIST[@]}"
+    do
+        if ! cp -r "$COMMON_TESTS_DIR/$TEST/"* "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+        then
+            if [ "$TEST" == "EmptyDir" ]
+            then
+                continue
+            fi
+            echo "Failed to copy $TEST into $TEST_NAME"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Символическая ссылка на файл с пробелами с названием"
+# @details  Данная функция выполняет создание директории с названием SymlinksWithSpaces
+#               и создает в ней символические ссылки на файлы и директории, в названии которых есть пробелы 
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestSymlinksWithSpaces()
+{
+    local TEST_NAME="SymlinksWithSpaces"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILES_LIST=("File name"
+                      "Something to test"
+                      "I don't know what to write")
+    local FILE=""
+    for FILE in "${FILES_LIST[@]}"
+    do
+        if ! echo "File $FILE" > "$COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+
+        if ! ln -s "$FILE" "$COMMON_TESTS_DIR/$TEST_NAME/${FILE} symlink" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/${FILE} symlink to $FILE"
+            return 1
+        fi
+    done
+
+    local DIRECTORIES_LIST=("Directory name"
+                            "Another directory for tests"
+                            "I placed some spaces here")
+    local DIRECTORY=""
+    for DIRECTORY in "${DIRECTORIES_LIST[@]}"
+    do
+        if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+
+        if ! ln -s "$DIRECTORY" "$COMMON_TESTS_DIR/$TEST_NAME/${DIRECTORY} symlink" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/${DIRECTORY} symlink to $DIRECTORY"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Различные права доступа"
+# @details  Данная функция выполняет создание директории с названием DifferentAccess
+#               и создает в ней файлы и директории с различными правами доступа
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestDifferentAccess()
+{
+    local TEST_NAME="DifferentAccess"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILES_LIST=("FileAccess_000"
+                      "FileAccess_400"
+                      "FileAccess_600"
+                      "FileAccess_644"
+                      "FileAccess_664"
+                      "FileAccess_700"
+                      "FileAccess_755"
+                      "FileAccess_777"
+                      "FileAccess_4755"
+                      "FileAccess_4644"
+                      "FileAccess_2755"
+                      "FileAccess_2644"
+                      "FileAccess_7777"
+                      "FileAccess_6777"
+                      "FileAccess_6755")
+    local FILE=""
+    for FILE in "${FILES_LIST[@]}"
+    do
+        if ! truncate -s 0 "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+        local ACCESS="$(echo "$FILE" | cut -d '_' -f2)"
+        if ! chmod "$ACCESS" "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to change access of $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+    done
+
+    local DIRECTORIES_LIST=("DirectoryAccess_700"
+                            "DirectoryAccess_755"
+                            "DirectoryAccess_775"
+                            "DirectoryAccess_777"
+                            "DirectoryAccess_1777"
+                            "DirectoryAccess_1666")
+    local DIRECTORY=""
+    for DIRECTORY in "${DIRECTORIES_LIST[@]}"
+    do
+        if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+        local ACCESS="$(echo "$DIRECTORY" | cut -d '_' -f2)"
+        if ! chmod "$ACCESS" "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to change access of $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Файлы с русскими символами в названии"
+# @details  Данная функция выполняет создание директории с названием TestRussianSymbols
+#               и создает в ней файлы и директории, в названии которых есть русские символы
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestRussianSymbols()
+{
+    local TEST_NAME="RussianSymbols"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILES_LIST=("Файл"
+                      "Еще_Один.bin"
+                      "Пусть_Будет_И_Один.odin"
+                      "Ну_И_Тор.thor")
+    local FILE=""
+    for FILE in "${FILES_LIST[@]}"
+    do
+        if ! echo "File $FILE" > "$COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+    done
+
+    local DIRECTORIES_LIST=("Директория"
+                            "Одна"
+                            "Вторая"
+                            "Третья")
+    local DIRECTORY=""
+    for DIRECTORY in "${DIRECTORIES_LIST[@]}"
+    do
+        if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Файлы разных типов"
+# @details  Данная функция выполняет создание директории с названием DifferentTypes
+#               и создает в ней файлых разных типов
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestDifferentTypes()
+{
+    local TEST_NAME="DifferentTypes"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILE="Regular"
+    if ! touch "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+        return 1
+    fi
+
+    local DIRECTORY="Directory"
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+        return 1
+    fi
+
+    local SYMLINK="Symlink"
+    if ! ln -s "$FILE" "$COMMON_TESTS_DIR/$TEST_NAME/$SYMLINK" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$SYMLINK"
+        return 1
+    fi
+
+    local FIFO="FIFO"
+    if ! mkfifo "$COMMON_TESTS_DIR/$TEST_NAME/$FIFO" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FIFO"
+        return 1
+    fi
+
+    local CHAR="Char"
+    if ! mknod "$COMMON_TESTS_DIR/$TEST_NAME/$CHAR" c 1 7 >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$CHAR"
+        return 1
+    fi
+
+    local BLOCK="Block"
+    if ! mknod "$COMMON_TESTS_DIR/$TEST_NAME/$BLOCK" b 7 0 >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$BLOCK"
+        return 1
+    fi
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Время изменения файла в будущем"
+# @details  Данная функция выполняет создание директории с названием EditTimeFuture
+#               и создает в ней файлы и директории с временем изменения, большим текущего
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestEditTimeFuture()
+{
+    local TEST_NAME="EditTimeFuture"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILES_LIST=("FileNew_6"
+                      "FileNew_7"
+                      "FileNew_8"
+                      "FileNew_9"
+                      "FileNew_10"
+                      "FileNew_19"
+                      "FileNew_26"
+                      "FileNew_41"
+                      "FileNew_86"
+                      "FileNew_100"
+                      "FileNew_182"
+                      "FileNew_183"
+                      "FileNew_184"
+                      "FileNew_200"
+                      "FileNew_365"
+                      "FileNew_1000")
+    local FILE=""
+    for FILE in "${FILES_LIST[@]}"
+    do
+        if ! truncate -s 0 "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+        local DAYS="$(echo "$FILE" | cut -d '_' -f2)"
+        if ! touch -d "+$DAYS days" "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to change timeEdit of $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+    done
+
+    local DIRECTORIES_LIST=("DirectoryNew_1"
+                            "DirectoryNew_32"
+                            "DirectoryNew_50"
+                            "DirectoryNew_182"
+                            "DirectoryNew_183"
+                            "DirectoryNew_184"
+                            "DirectoryNew_214"
+                            "DirectoryNew_500")
+    local DIRECTORY=""
+    for DIRECTORY in "${DIRECTORIES_LIST[@]}"
+    do
+        if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+        local DAYS="$(echo "$DIRECTORY" | cut -d '_' -f2)"
+        if ! touch -d "+$DAYS days" "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to change timeEdit of $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Сломанная символическая ссылка"
+# @details  Данная функция выполняет создание директории с названием SymlinksBroken
+#               и создает в ней символические ссылки на несуществующие файлы
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestSymlinksBroken()
+{
+    local TEST_NAME="SymlinksBroken"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILES_LIST=("FileFor"
+                      "OneMoreFor"
+                      "AndAgainFor")
+    local FILE=""
+    for FILE in "${FILES_LIST[@]}"
+    do
+        if ! ln -s "$FILE" "$COMMON_TESTS_DIR/$TEST_NAME/${FILE}BrokenSymink" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/${FILE}BrokenSymlink"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Различные UID:GID"
+# @details  Данная функция выполняет создание директории с названием DifferentUIDGID
+#               и создает в ней файлы и директории с различными UID и GID
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestDifferentUIDGID()
+{
+    local TEST_NAME="DifferentUIDGID"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILES_LIST=("File_0_0"
+                      "File_1000_1000"
+                      "File_1000_0"
+                      "File_132465_132465"
+                      "File_0_132465"
+                      "File_132465_1000")
+    local FILE=""
+    for FILE in "${FILES_LIST[@]}"
+    do
+        if ! echo "File $FILE" > "$COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+        local NEW_UID="$(echo "$FILE" | cut -d '_' -f2)"
+        local NEW_GID="$(echo "$FILE" | cut -d '_' -f3)"
+        if ! chown "$NEW_UID":"$NEW_GID" "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to change owner of $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+    done
+
+    local DIRECTORIES_LIST=("Directory_0_0"
+                            "Directory_1000_1000"
+                            "Directory_1000_0"
+                            "Directory_543513_543513"
+                            "Directory_0_543513"
+                            "Directory_543513_1000")
+    local DIRECTORY=""
+    for DIRECTORY in "${DIRECTORIES_LIST[@]}"
+    do
+        if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+        local NEW_UID="$(echo "$FILE" | cut -d '_' -f2)"
+        local NEW_GID="$(echo "$FILE" | cut -d '_' -f3)"
+        if ! chown "$NEW_UID":"$NEW_GID" "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to change owner of $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Большое количество файлов"
+# @details  Данная функция выполняет создание директории с названием BigFilesList
+#               и создает в ней большое количество файлов и директорий
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestBigFilesList()
+{
+    local TEST_NAME="BigFilesList"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local i=0
+    for i in $(seq 1 5000)
+    do
+        if ! echo "File $i" > "$COMMON_TESTS_DIR/$TEST_NAME/File_$i"
+        then
+            echo "Failed to create file $COMMON_TESTS_DIR/$TEST_NAME/File_$i"
+            return 1
+        fi
+    done
+    for i in $(seq 1 5000)
+    do
+        if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/Directory_$i" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create directory $COMMON_TESTS_DIR/$TEST_NAME/Directory_$i"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Время изменения файла в прошлом"
+# @details  Данная функция выполняет создание директории с названием EditTimePast
+#               и создает в ней файлы и директории с временем изменения, меньшим текущего
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestEditTimePast()
+{
+    local TEST_NAME="EditTimePast"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILES_LIST=("FileOld_6"
+                      "FileOld_7"
+                      "FileOld_8"
+                      "FileOld_9"
+                      "FileOld_10"
+                      "FileOld_19"
+                      "FileOld_26"
+                      "FileOld_41"
+                      "FileOld_86"
+                      "FileOld_100"
+                      "FileOld_182"
+                      "FileOld_183"
+                      "FileOld_184"
+                      "FileOld_200"
+                      "FileOld_365"
+                      "FileOld_1000")
+    local FILE=""
+    for FILE in "${FILES_LIST[@]}"
+    do
+        if ! truncate -s 0 "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+        local DAYS="$(echo "$FILE" | cut -d '_' -f2)"
+        if ! touch -d "-$DAYS days" "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to change timeEdit of $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+    done
+
+    local DIRECTORIES_LIST=("DirectoryOld_1"
+                            "DirectoryOld_32"
+                            "DirectoryOld_50"
+                            "DirectoryOld_182"
+                            "DirectoryOld_183"
+                            "DirectoryOld_184"
+                            "DirectoryOld_214"
+                            "DirectoryOld_500")
+    local DIRECTORY=""
+    for DIRECTORY in "${DIRECTORIES_LIST[@]}"
+    do
+        if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+        local DAYS="$(echo "$DIRECTORY" | cut -d '_' -f2)"
+        if ! touch -d "-$DAYS days" "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to change timeEdit of $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Названия файлов с пробелами"
+# @details  Данная функция выполняет создание директории с названием WithSpaces
+#               и создает в ней файлы и директории, в названиях которых есть пробелы
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestWithSpaces()
+{
+    local TEST_NAME="WithSpaces"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILES_LIST=("File with spaces"
+                      "One more"
+                      "And again")
+    local FILE=""
+    for FILE in "${FILES_LIST[@]}"
+    do
+        if ! echo "File $FILE" > "$COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+    done
+
+    local DIRECTORIES_LIST=("Directory with spaces"
+                            "Another one"
+                            "The last one")
+    local DIRECTORY=""
+    for DIRECTORY in "${DIRECTORIES_LIST[@]}"
+    do
+        if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Один файл"
+# @details  Данная функция выполняет создание директории с названием OneFileDir
+#               и создает в ней один файл
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestOneFileDir()
+{
+    local TEST_NAME="OneFileDir"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILE="TheLoneliestFile"
+    if ! echo "File $FILE" > "$COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+        return 1
+    fi
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Пустая директория"
+# @details  Данная функция выполняет создание директории с названием EmptyDir
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestEmptyDir()
+{
+    local TEST_NAME="EmptyDir"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    echo "Done"
+
+    return 0
+}
+
+#
+# Точка входа в скрипт
+#
+
+main
+exit $?
