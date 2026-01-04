@@ -2,6 +2,10 @@
 
 # @file     makeTests
 # @brief    Скрипт проведения тестов для проверки утилиты jls
+# @param    arg Путь до jls
+
+# Для подавления ошибок jls типа Aborted (core dumped)
+set +o notify
 
 #
 # Константы
@@ -16,6 +20,25 @@ readonly COMMON_SCRIPT_NAME="$(basename "$0")"
 # @brief    Директория с тестовым окружением
 readonly COMMON_TESTS_DIR="$COMMON_SCRIPT_DIR/../tests"
 
+# @brief    Путь до утилиты jls
+readonly COMMON_JLS="$1"
+
+#
+# Цвета
+#
+
+# @brief    Красный цвет
+readonly COMMON_RED='\033[31m'
+
+# @brief    Желтый цвет
+readonly COMMON_YELLOW='\033[33m'
+
+# @brief    Зеленый цвет
+readonly COMMON_GREEN='\033[32m'
+
+# @brief    Сброс цвета
+readonly COMMON_RESET='\033[0m'
+
 #
 # Общие переменные
 #
@@ -23,8 +46,9 @@ readonly COMMON_TESTS_DIR="$COMMON_SCRIPT_DIR/../tests"
 # @brief    Флаг наличия valgrind в системе
 COMMON_IS_VALGRIND_EXISTS=0
 
-# @brief    Список тестов
-COMMON_TESTS_LIST=()
+# @brief    Список тестов и их аргументов
+# @warning  Элементы в списке расположены как [i % 2 != 0] = "Название теста" [i % 2 == 0] = "Аргумент для jls" и тд.
+COMMON_TESTS_ARGS_LIST=()
 
 #
 # Функции
@@ -38,49 +62,116 @@ function main()
         return 1
     fi
 
-    local TEST=""
-    for TEST in "${COMMON_TESTS_LIST[@]}"
+    if (( ${#COMMON_TESTS_ARGS_LIST[@]} % 2 != 0 ))
+    then
+        echo "Fatal error: COMMON_TESTS_ARGS_LIST is even. Must be odd"
+        return 1
+    fi
+
+    local TESTS_RESULT_LIST=()
+    for ((i = 0; i < ${#COMMON_TESTS_ARGS_LIST[@]}; i+=2))
     do
-        performCompareTest "$TEST"
+        local TEST="${COMMON_TESTS_ARGS_LIST[$i]}"
+        local ARG="${COMMON_TESTS_ARGS_LIST[$i + 1]}"
+
+        TESTS_RESULT_LIST+=("${TEST}Compare")
+        performCompareTest "${TEST}Compare" "$ARG"
+        TESTS_RESULT_LIST+=("$?")
 
         if [ $COMMON_IS_VALGRIND_EXISTS -eq 1 ]
         then
-            performMemoryLeakTest "$TEST"
+            TESTS_RESULT_LIST+=("${TEST}MemoryLeak")
+            performMemoryLeakTest "${TEST}MemoryLeak" "$ARG"
+            TESTS_RESULT_LIST+=("$?")
         fi
+    done
+
+    local TEST_NAME_MAX_LENGTH=0
+    local TEST_NUMBER_MAX_LENGTH=0
+    for ((i = 0; i < ${#TESTS_RESULT_LIST[@]}; i+=2))
+    do
+        local TEST_NAME=${TESTS_RESULT_LIST[$i]}
+        if [[ ${#TEST_NAME} -gt $TEST_NAME_MAX_LENGTH ]]
+        then
+            TEST_NAME_MAX_LENGTH=${#TEST_NAME}
+        fi
+
+        local TEST_NUMBER=$((i / 2))
+        if [[ ${#TEST_NUMBER} -gt $TEST_NUMBER_MAX_LENGTH ]]
+        then
+            TEST_NUMBER_MAX_LENGTH=${#TEST_NUMBER}
+        fi
+    done
+
+    echo -e "\n\n\nSummary:"
+
+    for ((i = 0; i < ${#TESTS_RESULT_LIST[@]}; i+=2))
+    do
+        local TEST="${TESTS_RESULT_LIST[$i]}"
+        local RESULT="${TESTS_RESULT_LIST[$i + 1]}"
+        local TEST_NUMBER=$((i / 2))
+
+        if [[ $RESULT -eq 0 ]]
+        then
+            echo -en "$COMMON_GREEN"
+            RESULT="Passed"
+        else
+            echo -en "$COMMON_RED"
+            RESULT="Failed"
+        fi
+
+        printf "[%*d] %-*s %s" "$TEST_NUMBER_MAX_LENGTH" "$TEST_NUMBER" "$TEST_NAME_MAX_LENGTH" "$TEST" "$RESULT"
+
+        echo -e "$COMMON_RESET"
     done
 
     return 0
 }
 
 # @brief    Функция подготовки рабочего окружения
-# @details  Данная функция выполняет проверку существования тестовой среды,
+# @details  Данная функция выполняет проверку существования jls,
+#               тестовой среды,
 #               проверку наличия valgrind и
-#               формирует список тестов в переменной COMMON_TESTS_LIST 
+#               формирует список тестов в переменной <COMMON_TESTS_ARGS_LIST>
 # @return   Возвращает 0 в случае успешной подготовки рабочего окружения.
 #               В противном случае, возвращет 1
 function prepare()
 {
+    if ! [ -x "$COMMON_JLS" ]
+    then
+        echo -e "jls doesn't exist! Use:\n\tmake\nThen pass path to jls as first argument"
+        return 1
+    fi
+
     if ! [ -d "$COMMON_TESTS_DIR" ]
     then
         echo -e "Test environment doesn't exist! Use:\n\tmake testEnv"
         return 1
     fi
 
+    COMMON_TESTS_ARGS_LIST=()
+
+    # Тест на текущей директории
+    COMMON_TESTS_ARGS_LIST+=("Empty")
+    COMMON_TESTS_ARGS_LIST+=("")
+
+    # Тест на jls
+    COMMON_TESTS_ARGS_LIST+=("Self")
+    COMMON_TESTS_ARGS_LIST+=("$COMMON_JLS")
+
+    # Тест на корне ФС
+    COMMON_TESTS_ARGS_LIST+=("Root")
+    COMMON_TESTS_ARGS_LIST+=("/")
+
     local TEST=""
-    COMMON_TESTS_LIST=()
     for TEST in "$COMMON_TESTS_DIR/"*
     do
         if [ -d "$TEST" ]
         then
-            COMMON_TESTS_LIST+=("$(basename "$TEST")")
+            COMMON_TESTS_ARGS_LIST+=("$(basename "$TEST")")
+            COMMON_TESTS_ARGS_LIST+=("$COMMON_TESTS_DIR/$(basename "$TEST")")
         fi
     done
-
-    if [ ${#COMMON_TESTS_LIST[@]} == 0 ]
-    then
-        echo "No tests found!"
-        return 1
-    fi
 
     if command -v valgrind >> /dev/null 2>&1
     then
@@ -92,17 +183,78 @@ function prepare()
 
 # @brief    Функция выполнения теста, сравнивающего вывод jls и ls -l
 # @details  Данная функция выполняет: <br>
-#               - Запуск jls   с ARG в качестве аргумента и записывает вывод в COMMON_TESTS_DIR/ARG.jls <br>
-#               - Запуск ls -l с ARG в качестве аргумента и записывает вывод в COMMON_TESTS_DIR/ARG.ls  <br>
-#               - Запуск diff COMMON_TESTS_DIR/ARG.jls COMMON_TESTS_DIR/ARG.ls и записывает вывод в COMMON_TESTS_DIR/ARG.diff <br>
-# @param    ARG Аргумент запуска
+#               - Запуск jls   с ARG в качестве аргумента и записывает вывод в <COMMON_TESTS_DIR>/<TEST>.jls <br>
+#               - Запуск ls -l с ARG в качестве аргумента и записывает вывод в <COMMON_TESTS_DIR>/<TEST>.ls  <br>
+#               - Запуск diff <COMMON_TESTS_DIR>/<TEST>.ls <COMMON_TESTS_DIR>/<TEST>.jls и записывает вывод в <COMMON_TESTS_DIR>/<TEST>.diff <br>
+# @param    TEST Название теста
+# @param    ARG  Аргумент запуска
 # @return   Возвращает 0, если вывод jls и ls одинаковы.
 #               В противном случае, возвращает 1
 function performCompareTest()
 {
-    echo -n "Performing ${TEST}Compare test... "
+    local TEST="ANON"
+    local ARG=""
 
-    echo "Done"
+    if [ -n "$1" ]
+    then
+        TEST="$1"
+    fi
+
+    if [ -n "$2" ]
+    then
+        ARG="$2"
+    fi
+
+    local JLS_OUTPUT_FILE="$COMMON_TESTS_DIR/${TEST}.jls"
+    local LS_OUTPUT_FILE="$COMMON_TESTS_DIR/${TEST}.ls"
+    local DIFF_OUTPUT_FILE="$COMMON_TESTS_DIR/${TEST}.diff"
+
+    echo -en "${COMMON_YELLOW}"
+    echo     "=====${TEST}====="
+    echo     "ARG              is $ARG"
+    echo     "JLS_OUTPUT_FILE  is $JLS_OUTPUT_FILE"
+    echo     "LS_OUTPUT_FILE   is $LS_OUTPUT_FILE"
+    echo     "DIFF_OUTPUT_FILE is $DIFF_OUTPUT_FILE"
+    echo -e  "${COMMON_RESET}"
+
+    if ! truncate -s 0 "$JLS_OUTPUT_FILE" >> /dev/null 2>&1
+    then
+        echo -en "${COMMON_RED}"
+        echo -n  "Failed to create $JLS_OUTPUT_FILE file"
+        echo -e  "${COMMON_RESET}"
+        return 1
+    fi
+
+    if ! truncate -s 0 "$LS_OUTPUT_FILE" >> /dev/null 2>&1
+    then
+        echo -en "${COMMON_RED}"
+        echo -n  "Failed to create $LS_OUTPUT_FILE file"
+        echo -e  "${COMMON_RESET}"
+        return 1
+    fi
+
+    if ! truncate -s 0 "$DIFF_OUTPUT_FILE" >> /dev/null 2>&1
+    then
+        echo -en "${COMMON_RED}"
+        echo -n  "Failed to create $DIFF_OUTPUT_FILE file"
+        echo -e  "${COMMON_RESET}"
+        return 1
+    fi
+
+    "$COMMON_JLS" "$ARG" >> "$JLS_OUTPUT_FILE" 2>&1
+    ls -l         "$ARG" >> "$LS_OUTPUT_FILE"  2>&1
+
+    if ! diff  "$LS_OUTPUT_FILE" "$JLS_OUTPUT_FILE" >> "$DIFF_OUTPUT_FILE" 2>&1
+    then
+        echo -en "${COMMON_RED}"
+        echo -n  "Test failed: output of jls and ls -l differs"
+        echo -e  "${COMMON_RESET}"
+        return 1
+    fi
+
+    echo -en "${COMMON_GREEN}"
+    echo -n  "Test passed"
+    echo -e  "${COMMON_RESET}"
 
     return 0
 }
@@ -110,20 +262,58 @@ function performCompareTest()
 # @brief    Функция выполнения теста на утечки памяти
 # @details  Данная функция выполняет проверку наличия valgrind в системе, 
 #               запуск jls с ARG в качестве аргумента при помощи valgrind и 
-#               записывает вывод в COMMON_TESTS_DIR/ARG.valgrind
-# @param    ARG Аргумент запуска
+#               записывает вывод в <COMMON_TESTS_DIR>/<TEST>.valgrind
+# @param    TEST Название теста
+# @param    ARG  Аргумент запуска
 # @return   Возвращает 0, если valgrind не обнаружил утечек памяти у jls.
 #               В противном случае, возвращает 1
 function performMemoryLeakTest()
 {
+    local TEST="ANON"
+    local ARG=""
+
+    if [ -n "$1" ]
+    then
+        TEST="$1"
+    fi
+
+    if [ -n "$2" ]
+    then
+        ARG="$2"
+    fi
+
     if [ $COMMON_IS_VALGRIND_EXISTS -eq 0 ]
     then
         return 1
+    fi    
+    
+    local VALGRIND_OUTPUT_FILE="$COMMON_TESTS_DIR/${TEST}.valgrind"
+
+    echo -en "${COMMON_YELLOW}"
+    echo     "=====${TEST}====="
+    echo     "ARG                  is $ARG"
+    echo     "VALGRIND_OUTPUT_FILE is $VALGRIND_OUTPUT_FILE"
+    echo -e  "${COMMON_RESET}"
+
+    if ! truncate -s 0 "$VALGRIND_OUTPUT_FILE" >> /dev/null 2>&1
+    then
+        echo -en "${COMMON_RED}"
+        echo -n  "Failed to create $VALGRIND_OUTPUT_FILE file"
+        echo -e  "${COMMON_RESET}"
+        return 1
     fi
 
-    echo -n "Performing ${TEST}MemoryLeak test... "
+    if ! valgrind --leak-check=full --error-exitcode=1 --log-file="$VALGRIND_OUTPUT_FILE" "$COMMON_JLS" "$ARG" >> /dev/null 2>&1
+    then
+        echo -en "${COMMON_RED}"
+        echo -n  "Failed. Memory-leaks detected"
+        echo -e  "${COMMON_RESET}"
+        return 1
+    fi
 
-    echo "Done"
+    echo -en "${COMMON_GREEN}"
+    echo -n  "Test passed"
+    echo -e  "${COMMON_RESET}"
 
     return 0
 }
@@ -134,53 +324,3 @@ function performMemoryLeakTest()
 
 main
 exit $?
-
-# переаботка с Cmake
-
-#execute_process(COMMAND bash -c "${CMAKE_SOURCE_DIR}/scripts/makeTestEnv")
-#
-## Получение списка директорий для тестирования
-#file(GLOB TEST_ENTITIES RELATIVE "${CMAKE_SOURCE_DIR}/tests" "${CMAKE_SOURCE_DIR}/tests/*")
-#set(TEST_ARGS "")
-#foreach(DIR ${TEST_ENTITIES})
-#    if (IS_DIRECTORY "${DIR}")
-#        list(APPEND TEST_ARGS "${DIR}")
-#    endif()
-#endforeach()
-#list(APPEND TEST_ARGS "")
-#list(APPEND TEST_ARGS "./${PROJECT_NAME}")
-#list(APPEND TEST_ARGS "/")
-#
-## Создание тестов
-#foreach(TEST_NAME "${TEST_ARGS}")
-#    set(TEST_DIR  "${CMAKE_SOURCE_DIR}/tests/${TEST_NAME}")
-#
-#    set(TEST_NAME_COMPARE "${TEST_NAME}Compare")
-#    set(OUT_JLS           "${TEST_DIR}/${TEST_NAME_COMPARE}.jls")
-#    set(OUT_LS            "${TEST_DIR}/${TEST_NAME_COMPARE}.ls")
-#
-#    add_test(
-#        NAME "${TEST_NAME_COMPARE}"
-#        COMMAND bash -c
-#        "
-#        LC_ALL=C
-#        set -e
-#        ./${PROJECT_NAME} \"${TEST_DIR}\" > \"${OUT_JLS}\"
-#        ls   -l           \"${TEST_DIR}\" > \"${OUT_LS}\"
-#        diff -q           \"${OUT_JLS}\"    \"${OUT_LS}\"
-#        "
-#    )
-#
-#    if (VALGRIND)
-#        set(TEST_NAME_MEMORY "${TEST_NAME}MemoryLeaks")
-#        set(OUT_VALGRIND     "${TEST_DIR}/${TEST_NAME_MEMORY}.valgrind")
-#        set(TEST_MEMORY_COMMAND "${VALGRIND} --leak-check=full --error-exitcode=1 --log-file=${OUT_VALGRIND} ./${PROJECT_NAME}")
-#        add_test(
-#            NAME "${TEST_NAME_MEMORY}" 
-#            COMMAND bash -c 
-#            "
-#            ${TEST_MEMORY_COMMAND} \"${TEST_DIR}\"
-#            "
-#        )
-#    endif()
-#endforeach()
