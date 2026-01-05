@@ -74,6 +74,22 @@ int jls(const char *filePtr)
 
     if (fileInfo.type != fileInfoTypeDirectory)
     {
+        if (fileInfo.fileNamePtr)
+        {
+            free(fileInfo.fileNamePtr);
+            fileInfo.fileNamePtr = 0;
+        }
+        
+        fileInfo.fileNamePtr = malloc(strlen(filePtr) + 1);
+        if (!fileInfo.fileNamePtr)
+        {
+            isOk = false;
+            goto cleanup;
+        }
+        
+        strcpy(fileInfo.fileNamePtr, filePtr);
+        fileInfo.fileNameLength = strlen(filePtr) + 1;
+
         fileInfoStringLength = fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH, &isOk);
         if (isOk)
         {

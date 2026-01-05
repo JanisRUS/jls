@@ -130,13 +130,19 @@ function main()
 
     echo
 
-    echo -en "$COMMON_RED"
-    echo -n  "Failed $FAILED_COUNT/$((${#TESTS_RESULT_LIST[@]}/2))"
-    echo -e  "$COMMON_RESET"
+    if [[ "$FAILED_COUNT" -gt 0 ]]
+    then
+        echo -en "$COMMON_RED"
+        echo -n  "Failed $FAILED_COUNT/$((${#TESTS_RESULT_LIST[@]}/2))"
+        echo -e  "$COMMON_RESET"
+    fi
 
-    echo -en "$COMMON_GREEN"
-    echo -n  "Passed $PASSED_COUNT/$((${#TESTS_RESULT_LIST[@]}/2))"
-    echo -e  "$COMMON_RESET"
+    if [[ "$PASSED_COUNT" -gt 0 ]]
+    then
+        echo -en "$COMMON_GREEN"
+        echo -n  "Passed $PASSED_COUNT/$((${#TESTS_RESULT_LIST[@]}/2))"
+        echo -e  "$COMMON_RESET"
+    fi
 
     echo
 
