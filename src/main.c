@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
         {
             if (isOk)
             {
-                printf("ls: cannot access '%s': No such file or directory\n", filePtr);
+                fprintf(stderr, "ls: cannot access '%s': No such file or directory\n", filePtr);
             }
         }
     }

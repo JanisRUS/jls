@@ -191,9 +191,9 @@ function prepare()
     COMMON_TESTS_ARGS_LIST+=("Self")
     COMMON_TESTS_ARGS_LIST+=("$COMMON_JLS")
 
-    # Тест на корне ФС
-    COMMON_TESTS_ARGS_LIST+=("Root")
-    COMMON_TESTS_ARGS_LIST+=("/")
+    # Тест на /usr/bin
+    COMMON_TESTS_ARGS_LIST+=("UsrBin")
+    COMMON_TESTS_ARGS_LIST+=("/usr/bin")
 
     # Тест на корне ФС
     COMMON_TESTS_ARGS_LIST+=("DoubleQuites")
@@ -288,14 +288,23 @@ function performCompareTest()
         return 1
     fi
 
-    local JLS_TIME=""
-    local  LS_TIME=""
-    TIMEFORMAT='%R'
-    JLS_TIME=$({ time ("$COMMON_JLS" $ARG >> "$JLS_OUTPUT_FILE" 2>&1); } 2>&1)
-    LS_TIME=$({  time (ls -l         $ARG >> "$LS_OUTPUT_FILE"  2>&1); } 2>&1)
+    local JLS_INFO=""
+    local  LS_INFO=""
+    local TMP_FILE="/tmp/$COMMON_SCRIPT_NAME.info"    
 
-    echo "jls   run time is: $JLS_TIME sec"
-    echo "ls -l run time is: $LS_TIME sec"
+    /usr/bin/time -q -f "uptime=%e sec  peak-memory=%M KiB" -o "$TMP_FILE" "$COMMON_JLS" $ARG >> "$JLS_OUTPUT_FILE" 2>&1
+    JLS_INFO=$(< "$TMP_FILE")
+    rm -f "$TMP_FILE"
+
+    /usr/bin/time -q -f "uptime=%e sec  peak-memory=%M KiB" -o "$TMP_FILE" ls -l $ARG >> "$LS_OUTPUT_FILE" 2>&1
+    LS_INFO=$(< "$TMP_FILE")
+    rm -f "$TMP_FILE"
+
+    #JLS_INFO=$( /usr/bin/time -f "uptime=%e sec; peak-memory=%M KiB" "$COMMON_JLS" "$ARG" >> "$JLS_OUTPUT_FILE" 2>&1 )
+    #LS_INFO=$(  /usr/bin/time -f "uptime=%e sec; peak-memory=%M KiB" ls -l         "$ARG" >> "$LS_OUTPUT_FILE"  2>&1 )
+
+    echo "jls info: $JLS_INFO"
+    echo "ls  info: $LS_INFO"
 
     if ! diff  "$LS_OUTPUT_FILE" "$JLS_OUTPUT_FILE" >> "$DIFF_OUTPUT_FILE" 2>&1
     then

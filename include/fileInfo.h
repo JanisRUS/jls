@@ -23,7 +23,7 @@
 */
 
 /// @brief      Максимальный размер строки fileInfoStruct.targetPtr с учетом \0
-#define FILE_INFO_TARGET_LENGTH_MAX 51
+#define FILE_INFO_TARGET_LENGTH_MAX 256
 
 /// @brief      Символ-разделитель полей функци fileInfoToString()
 #define FILE_INFO_TO_STRING_DELIMER '\t'
