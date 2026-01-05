@@ -130,7 +130,7 @@ function main()
 
 # @brief    Функция подготовки рабочего окружения
 # @details  Данная функция выполняет проверку существования jls,
-#               тестовой среды,
+#               проверку существования тестовой среды, её очистку от логов тестов
 #               проверку наличия valgrind и
 #               формирует список тестов в переменной <COMMON_TESTS_ARGS_LIST>
 # @return   Возвращает 0 в случае успешной подготовки рабочего окружения.
@@ -171,6 +171,10 @@ function prepare()
             COMMON_TESTS_ARGS_LIST+=("$(basename "$TEST")")
             COMMON_TESTS_ARGS_LIST+=("$COMMON_TESTS_DIR/$(basename "$TEST")")
         fi
+        if [ -f "$TEST" ]
+        then
+            rm "$COMMON_TESTS_DIR/$(basename "$TEST")"
+        fi
     done
 
     if command -v valgrind >> /dev/null 2>&1
@@ -187,7 +191,8 @@ function prepare()
 #               - Запуск ls -l с ARG в качестве аргумента и записывает вывод в <COMMON_TESTS_DIR>/<TEST>.ls  <br>
 #               - Запуск diff <COMMON_TESTS_DIR>/<TEST>.ls <COMMON_TESTS_DIR>/<TEST>.jls и записывает вывод в <COMMON_TESTS_DIR>/<TEST>.diff <br>
 # @param    TEST Название теста
-# @param    ARG  Аргумент запуска
+# @param    ARG  Аргументы запуска
+# @param    ARG используется данной функцией без двойных кавычек 
 # @return   Возвращает 0, если вывод jls и ls одинаковы.
 #               В противном случае, возвращает 1
 function performCompareTest()
@@ -215,6 +220,7 @@ function performCompareTest()
     echo     "JLS_OUTPUT_FILE  is $JLS_OUTPUT_FILE"
     echo     "LS_OUTPUT_FILE   is $LS_OUTPUT_FILE"
     echo     "DIFF_OUTPUT_FILE is $DIFF_OUTPUT_FILE"
+    echo     "Command: \"$COMMON_JLS\" $ARG >> \"$JLS_OUTPUT_FILE\" 2>&1"
     echo -e  "${COMMON_RESET}"
 
     if ! truncate -s 0 "$JLS_OUTPUT_FILE" >> /dev/null 2>&1
@@ -241,8 +247,8 @@ function performCompareTest()
         return 1
     fi
 
-    "$COMMON_JLS" "$ARG" >> "$JLS_OUTPUT_FILE" 2>&1
-    ls -l         "$ARG" >> "$LS_OUTPUT_FILE"  2>&1
+    "$COMMON_JLS" $ARG >> "$JLS_OUTPUT_FILE" 2>&1
+    ls -l         $ARG >> "$LS_OUTPUT_FILE"  2>&1
 
     if ! diff  "$LS_OUTPUT_FILE" "$JLS_OUTPUT_FILE" >> "$DIFF_OUTPUT_FILE" 2>&1
     then
@@ -265,6 +271,7 @@ function performCompareTest()
 #               записывает вывод в <COMMON_TESTS_DIR>/<TEST>.valgrind
 # @param    TEST Название теста
 # @param    ARG  Аргумент запуска
+# @param    ARG используется данной функцией без двойных кавычек
 # @return   Возвращает 0, если valgrind не обнаружил утечек памяти у jls.
 #               В противном случае, возвращает 1
 function performMemoryLeakTest()
@@ -288,11 +295,13 @@ function performMemoryLeakTest()
     fi    
     
     local VALGRIND_OUTPUT_FILE="$COMMON_TESTS_DIR/${TEST}.valgrind"
+    local JLS_OUTPUT_FILE="/tmp/$COMMON_SCRIPT_NAME.jls.output"
 
     echo -en "${COMMON_YELLOW}"
     echo     "=====${TEST}====="
     echo     "ARG                  is $ARG"
     echo     "VALGRIND_OUTPUT_FILE is $VALGRIND_OUTPUT_FILE"
+    echo     "Command: valgrind --leak-check=full --error-exitcode=1 --log-file=\"$VALGRIND_OUTPUT_FILE\" \"$COMMON_JLS\" $ARG >> /dev/null 2>&1"
     echo -e  "${COMMON_RESET}"
 
     if ! truncate -s 0 "$VALGRIND_OUTPUT_FILE" >> /dev/null 2>&1
@@ -303,7 +312,15 @@ function performMemoryLeakTest()
         return 1
     fi
 
-    if ! valgrind --leak-check=full --error-exitcode=1 --log-file="$VALGRIND_OUTPUT_FILE" "$COMMON_JLS" "$ARG" >> /dev/null 2>&1
+    if ! truncate -s 0 "$JLS_OUTPUT_FILE" >> /dev/null 2>&1
+    then
+        echo -en "${COMMON_RED}"
+        echo -n  "Failed to create $JLS_OUTPUT_FILE file"
+        echo -e  "${COMMON_RESET}"
+        return 1
+    fi
+
+    if ! valgrind --leak-check=full --error-exitcode=1 --log-file="$VALGRIND_OUTPUT_FILE" "$COMMON_JLS" $ARG >> "$JLS_OUTPUT_FILE" 2>&1
     then
         echo -en "${COMMON_RED}"
         echo -n  "Failed. Memory-leaks detected"

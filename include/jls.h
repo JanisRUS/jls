@@ -13,6 +13,7 @@
 #define _JLS_H_
 
 #include <stdlib.h>
+#include <stdbool.h>
 
 /*
     Макроподстановки
@@ -75,37 +76,42 @@ int jls(const char *filePtr);
 /// @param[in]  fileInfoStringPtr Указатель на строку с информацией о файле
 /// @warning    Строка fileInfoStringPtr должна соответствовать строке, получаемой при помощи fileInfoToString()
 /// @param[in]  alignmentPtr      Указатель структуру максимальных размеров полей информации о файле
+/// @param[out] isOkPtr           Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @note       Указатель alignmentPtr может быть равен 0
-void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr);
+void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr, bool *isOkPtr);
 
 /// @brief      Функция получения списка файлов в указанной директории
 /// @details    Данная функция выполняет последовательное формирование списка файлов, игнорируя . и ..
 /// @warning    Данная функция использует malloc!
 ///                 Не забудьте очистить память при выходе из программы, очистив каждый элемент списка и сам список! 
-/// @param[in]  dirPtr Указатель на директорию
+/// @param[in]  dirPtr  Указатель на директорию
+/// @param[out] isOkPtr Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return     Возвращает список файлов в указанной директории
-jlsFilesListStruct jlsGetFilesList(const char *dirPtr);
+jlsFilesListStruct jlsGetFilesList(const char *dirPtr, bool *isOkPtr);
 
 /// @brief      Функция сортировки списка файлов
 /// @details    Данная функция выполняет сортировку filesListPtr по sort
 /// @param[in]  filesListPtr Указатель на список файлов
 /// @param[in]  sort         Тип сортировки
-void jlsSortFilesList(const jlsFilesListStruct *filesListPtr, jlsSortEnum sort);
+/// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
+void jlsSortFilesList(const jlsFilesListStruct *filesListPtr, jlsSortEnum sort, bool *isOkPtr);
 
 /// @brief      Функция подсчета количества файлов в директории
 /// @details    Данная функция выполняет последовательный подсчет количества файлов в директории, игнорируя . и .. 
-/// @param[in]  dirPtr Указатель на директорию
+/// @param[in]  dirPtr  Указатель на директорию
+/// @param[out] isOkPtr Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return     Возвращает количество файлов в директории
-size_t jlsCountFilesInDirectory(const char *dirPtr);
+size_t jlsCountFilesInDirectory(const char *dirPtr, bool *isOkPtr);
 
 /// @brief      Функция расчета максимальных размеров полей информации о файле
 /// @details    Данная функция выполняет последовательное получение информации о файлах, 
 ///                 получение строкового представления этой информации и расчет длины каждого поля информации о файле.
 ///                 Если какое то поле превысило прошлый максимум этого поля, он будет обновлен
-/// @param[in] pathPtr   Указатель на директорию с файлами
-/// @param[in] filesList Список файлов в указанной директории
+/// @param[in]  pathPtr   Указатель на директорию с файлами
+/// @param[in]  filesList Список файлов в указанной директории
+/// @param[out] isOkPtr   Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return    Возвращает структуру с максимальными размерами всех полей информации о файле
-jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesListStruct *filesList);
+jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr);
 
 // _JLS_H_
 #endif

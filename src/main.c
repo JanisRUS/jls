@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
         printf("Unsupported argument(s) found. Utility supports only 0 or 1 argument\n");
         isOk = false;
         goto cleanup;
-    }    
+    }
     if (argc > 1)
     {
         char  *lastArgumentPtr = 0;
@@ -55,10 +55,12 @@ int main(int argc, char *argv[])
         strcpy(filePtr, lastArgumentPtr);
     }
 
-    if (!fileInfoIsExists(filePtr))
+    if (!fileInfoIsExists(filePtr, &isOk))
     {
-        printf("No such file or directory\n");
-        isOk = false;
+        if (isOk)
+        {
+            printf("ls: cannot access '%s': No such file or directory\n", filePtr);
+        }
         goto cleanup;
     }
 

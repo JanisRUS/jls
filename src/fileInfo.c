@@ -29,11 +29,24 @@ struct stat fileInfoStat = {0};
     Функции
 */
 
-bool fileInfoIsExists(const char *filePtr)
+bool fileInfoIsExists(const char *filePtr, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     struct stat fileInfo = {0};
 
-    if (!filePtr || (lstat(filePtr, &fileInfo) && errno == ENOENT))
+    if (!filePtr)
+    {
+        *isOkPtr = false;
+        return false;
+    }
+
+    if (lstat(filePtr, &fileInfo) && errno == ENOENT)
     {
         return false;
     }
@@ -41,24 +54,30 @@ bool fileInfoIsExists(const char *filePtr)
     return true;
 }
 
-bool fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr)
+void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool *isOkPtr)
 {
     bool isOk = true;
 
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
+    // Объявление переменных, используемых в cleanup
+    char *filePtrCopy = 0;
+
     if (!filePtr || !fileInfoPtr || !fileInfoSetActiveFile(filePtr))
     {
-        isOk = false;
+        *isOkPtr = false;
         goto cleanup;
     }
     
     memset(fileInfoPtr, 0, sizeof(fileInfoStruct));
 
-    char *filePtrCopy = 0;
-
     filePtrCopy = strdup(filePtr);
     if (!filePtrCopy) 
     {
-        isOk = false;
+        *isOkPtr = false;
         goto cleanup;
     }
 
@@ -68,7 +87,7 @@ bool fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr)
     fileInfoPtr->fileNamePtr = malloc(strlen(fileNamePtr) + 1);
     if (!fileInfoPtr->fileNamePtr)
     {
-        isOk = false;
+        *isOkPtr = false;
         goto cleanup;
     }
 
@@ -79,23 +98,71 @@ bool fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr)
     fileInfoPtr->targetPtr = malloc(FILE_INFO_TARGET_LENGTH_MAX);
     if (!fileInfoPtr->targetPtr)
     {
-        isOk = false;
+        *isOkPtr = false;
         goto cleanup;
     }
 
-    fileInfoPtr->type       = fileInfoGetType();
-    fileInfoPtr->access     = fileInfoGetAccess();
-    fileInfoPtr->linksCount = fileInfoGetLinksCount();
-    fileInfoPtr->ownerId    = fileInfoGetOwnerId();
-    fileInfoPtr->groupId    = fileInfoGetGroupId();
-    fileInfoPtr->size       = fileInfoGetSize();
-    fileInfoPtr->timeEdit   = fileInfoGetTimeEdit();
-    fileInfoPtr->blocks     = fileInfoGetBlocks();
+    fileInfoPtr->type = fileInfoGetType(isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
+
+    fileInfoPtr->access = fileInfoGetAccess(isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
+
+    fileInfoPtr->linksCount = fileInfoGetLinksCount(isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
+
+    fileInfoPtr->ownerId = fileInfoGetOwnerId(isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
+
+    fileInfoPtr->groupId = fileInfoGetGroupId(isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
+    
+    fileInfoPtr->size = fileInfoGetSize(isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
+
+    fileInfoPtr->timeEdit = fileInfoGetTimeEdit(isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
+
+    fileInfoPtr->blocks = fileInfoGetBlocks(isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
 
     if (fileInfoPtr->type == fileInfoTypeLink)
     {
-        fileInfoPtr->targetLength   = fileInfoGetLinkTarget(fileInfoPtr->targetPtr, FILE_INFO_TARGET_LENGTH_MAX);
-        fileInfoPtr->isTargetExists = fileInfoIsExists(fileInfoPtr->targetPtr);
+        fileInfoPtr->targetLength = fileInfoGetLinkTarget(fileInfoPtr->targetPtr, FILE_INFO_TARGET_LENGTH_MAX, isOkPtr);
+        if (!*isOkPtr)
+        {
+            goto cleanup;
+        }
+
+        fileInfoPtr->isTargetExists = fileInfoIsExists(fileInfoPtr->targetPtr, isOkPtr);
+        if (!*isOkPtr)
+        {
+            goto cleanup;
+        }
     }
 
 cleanup:
@@ -106,7 +173,7 @@ cleanup:
         filePtrCopy = 0;
     }
 
-    if (!isOk)
+    if (!*isOkPtr)
     {
         if (fileInfoPtr->fileNamePtr)
         {
@@ -118,15 +185,6 @@ cleanup:
             free(fileInfoPtr->targetPtr);
             fileInfoPtr->targetPtr = 0;
         }
-    }
-
-    if (isOk)
-    {
-        return true;
-    }
-    else
-    {
-        return false;
     }
 }
 
@@ -157,7 +215,7 @@ bool fileInfoSetActiveFile(const char *filePtr)
     return true;
 }
 
-void fileInfoClearActiveFile()
+void fileInfoClearActiveFile(void)
 {
     if (fileInfoPath)
     {
@@ -166,10 +224,18 @@ void fileInfoClearActiveFile()
     }
 }
 
-fileInfoTypesEnum fileInfoGetType()
+fileInfoTypesEnum fileInfoGetType(bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     if (!fileInfoPath)
     {
+        *isOkPtr = false;
         return fileInfoTypeUnknown;
     }
 
@@ -202,15 +268,24 @@ fileInfoTypesEnum fileInfoGetType()
         return fileInfoTypeSock;
     }
 
+    *isOkPtr = false;
     return fileInfoTypeUnknown;
 }
 
-fileInfoAccessStruct fileInfoGetAccess()
+fileInfoAccessStruct fileInfoGetAccess(bool *isOkPtr)
 {
+    bool isOk = true;
+    
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     fileInfoAccessStruct answer = {0};
     
     if (!fileInfoPath)
     {
+        *isOkPtr = false;
         return answer;
     }
 
@@ -232,10 +307,18 @@ fileInfoAccessStruct fileInfoGetAccess()
     return answer;
 }
 
-uint32_t fileInfoGetLinksCount()
+uint32_t fileInfoGetLinksCount(bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     if (!fileInfoPath)
     {
+        *isOkPtr = false;
         return 0;
     }
 
@@ -243,52 +326,92 @@ uint32_t fileInfoGetLinksCount()
 }
 
 
-uint32_t fileInfoGetOwnerId()
+uint32_t fileInfoGetOwnerId(bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     if (!fileInfoPath)
     {
+        *isOkPtr = false;
         return 0;
     }
 
     return fileInfoStat.st_uid;
 }
 
-uint32_t fileInfoGetGroupId()
+uint32_t fileInfoGetGroupId(bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     if (!fileInfoPath)
     {
+        *isOkPtr = false;
         return 0;
     }
 
     return fileInfoStat.st_gid;
 }
 
-uint32_t fileInfoGetSize()
+uint32_t fileInfoGetSize(bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     if (!fileInfoPath)
     {
+        *isOkPtr = false;
         return 0;
     }
 
     return fileInfoStat.st_size;
 }
 
-time_t fileInfoGetTimeEdit()
+time_t fileInfoGetTimeEdit(bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     if (!fileInfoPath)
     {
+        *isOkPtr = false;
         return 0;
     }
 
     return fileInfoStat.st_mtime;
 }
 
-size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength)
+size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     ssize_t answer = 0;
 
     if (!fileInfoPath || !stringPtr || stringLength <= 1)
     {
+        *isOkPtr = false;
         return 0;
     }
 
@@ -298,6 +421,7 @@ size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength)
     answer = readlink(fileInfoPath, stringPtr, stringLength - 1);
     if (answer <= 0)
     {
+        *isOkPtr = false;
         return 0;
     }
     stringPtr[answer] = '\0';
@@ -306,78 +430,98 @@ size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength)
     return (size_t)answer;
 }
 
-uint32_t fileInfoGetBlocks(void)
+uint32_t fileInfoGetBlocks(bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     if (!fileInfoPath)
     {
+        *isOkPtr = false;
         return 0;
     }
 
     return fileInfoStat.st_blocks;
 }
 
-size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t stringLength)
+/*
+    Функции получения строкового представления информации о файле
+*/
+
+size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t stringLength, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
     size_t answer = 0;
     size_t length = 0;
     
     if (!fileInfoPtr || !stringPtr || stringLength < 1)
     {
+        *isOkPtr = false;
         return 0;
     }
     
     --stringLength;
 
-    length = fileInfoToStringType(fileInfoPtr->type, &stringPtr[answer], stringLength - answer);
-    if (!length)
+    length = fileInfoToStringType(fileInfoPtr->type, &stringPtr[answer], stringLength - answer, isOkPtr);
+    if (!*isOkPtr)
     {
         return 0;
     }
     answer += length;
     stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
 
-    length = fileInfoToStringAccess(&fileInfoPtr->access, fileInfoPtr->type, &stringPtr[answer], stringLength - answer);
-    if (!length)
+    length = fileInfoToStringAccess(&fileInfoPtr->access, fileInfoPtr->type, &stringPtr[answer], stringLength - answer, isOkPtr);
+    if (!*isOkPtr)
     {
         return 0;
     }
     answer += length;
     stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
 
-    length = fileInfoToStringLinksCount(fileInfoPtr->linksCount, &stringPtr[answer], stringLength - answer);
-    if (!length)
+    length = fileInfoToStringLinksCount(fileInfoPtr->linksCount, &stringPtr[answer], stringLength - answer, isOkPtr);
+    if (!*isOkPtr)
     {
         return 0;
     }
     answer += length;
     stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
 
-    length = fileInfoToStringOwnerId(fileInfoPtr->ownerId, &stringPtr[answer], stringLength - answer);
-    if (!length)
+    length = fileInfoToStringOwnerId(fileInfoPtr->ownerId, &stringPtr[answer], stringLength - answer, isOkPtr);
+    if (!*isOkPtr)
     {
         return 0;
     }
     answer += length;
     stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
 
-    length = fileInfoToStringGroupId(fileInfoPtr->groupId, &stringPtr[answer], stringLength - answer);
-    if (!length)
+    length = fileInfoToStringGroupId(fileInfoPtr->groupId, &stringPtr[answer], stringLength - answer, isOkPtr);
+    if (!*isOkPtr)
     {
         return 0;
     }
     answer += length;
     stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
 
-    length = fileInfoToStringSize(fileInfoPtr->size, &stringPtr[answer], stringLength - answer);
-    if (!length)
+    length = fileInfoToStringSize(fileInfoPtr->size, &stringPtr[answer], stringLength - answer, isOkPtr);
+    if (!*isOkPtr)
     {
         return 0;
     }
     answer += length;
     stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
 
-    length = fileInfoToStringTimeEdit(fileInfoPtr->timeEdit, &stringPtr[answer], stringLength - answer);
-    if (!length)
+    length = fileInfoToStringTimeEdit(fileInfoPtr->timeEdit, &stringPtr[answer], stringLength - answer, isOkPtr);
+    if (!*isOkPtr)
     {
         return 0;
     }
@@ -403,7 +547,7 @@ size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size
     return answer;
 }
 
-size_t fileInfoToStringType(fileInfoTypesEnum type, char *stringPtr, size_t stringLength)
+size_t fileInfoToStringType(fileInfoTypesEnum type, char *stringPtr, size_t stringLength, bool *isOkPtr)
 {
     static const char typeToStringList[fileInfoTypeCount] =
     {
@@ -417,10 +561,18 @@ size_t fileInfoToStringType(fileInfoTypesEnum type, char *stringPtr, size_t stri
         's'
     };
 
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
     size_t answer = 0;
 
     if (type < fileInfoTypeUnknown || type > fileInfoTypeCount || !stringPtr || stringLength < 2)
     {
+        *isOkPtr = false;
         return 0;
     }
 
@@ -430,13 +582,21 @@ size_t fileInfoToStringType(fileInfoTypesEnum type, char *stringPtr, size_t stri
     return answer;
 }
 
-size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTypesEnum type, char *stringPtr, size_t stringLength)
+size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTypesEnum type, char *stringPtr, size_t stringLength, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
     size_t answer = 0;
     size_t length = 0;
 
     if (!accessPtr || !stringPtr || stringLength < 10)
     {
+        *isOkPtr = false;
         return 0;
     }
 
@@ -478,12 +638,20 @@ size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTyp
     return answer;
 }
 
-size_t fileInfoToStringLinksCount(uint32_t linksCount, char *stringPtr, size_t stringLength)
+size_t fileInfoToStringLinksCount(uint32_t linksCount, char *stringPtr, size_t stringLength, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
     size_t answer = 0;
     
     if (!stringPtr || stringLength < 1)
     {
+        *isOkPtr = false;
         return 0;
     }
     
@@ -494,12 +662,20 @@ size_t fileInfoToStringLinksCount(uint32_t linksCount, char *stringPtr, size_t s
 }
 
 
-size_t fileInfoToStringOwnerId(uint32_t ownerId, char *stringPtr, size_t stringLength)
+size_t fileInfoToStringOwnerId(uint32_t ownerId, char *stringPtr, size_t stringLength, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
     size_t answer = 0;
 
     if (!stringPtr || stringLength < 1)
     {
+        *isOkPtr = false;
         return 0;
     }
 
@@ -522,12 +698,20 @@ size_t fileInfoToStringOwnerId(uint32_t ownerId, char *stringPtr, size_t stringL
     return answer;
 }
 
-size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringLength)
+size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringLength, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
     size_t answer = 0;
     
     if (!stringPtr || stringLength < 1)
     {
+        *isOkPtr = false;
         return 0;
     }
     
@@ -550,12 +734,20 @@ size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringL
     return answer;
 }
 
-size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength)
+size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
     size_t answer = 0;
     
     if (!stringPtr || stringLength < 1)
     {
+        *isOkPtr = false;
         return 0;
     }
     
@@ -565,12 +757,20 @@ size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength)
     return answer;
 }
 
-size_t fileInfoToStringTimeEdit(time_t timeEdit, char *stringPtr, size_t stringLength)
+size_t fileInfoToStringTimeEdit(time_t timeEdit, char *stringPtr, size_t stringLength, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
     size_t answer = 0;
     
     if (!stringPtr || stringLength < 1)
     {
+        *isOkPtr = false;
         return 0;
     }
 

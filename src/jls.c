@@ -5,7 +5,6 @@
 #include "jls.h"
 #include "fileInfo.h"
 #include <stdio.h>
-#include <stdbool.h>
 #include <string.h>
 #include <dirent.h>
 #include <linux/limits.h>
@@ -19,8 +18,9 @@
 /// @param[in]  pathPtr    Указатель на путь к файлам
 /// @param[in]  bufferPtr  Указатель на буфер, куда будет записан pathPtr. Включая \0
 /// @param[in]  bufferSize Размер bufferPtr
+/// @param[out] isOkPtr    Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return     Возвращает количество записаных в pathPtr байт
-static size_t jlsPathSet(const char *pathPtr, char *bufferPtr, size_t bufferSize);
+static size_t jlsPathSet(const char *pathPtr, char *bufferPtr, size_t bufferSize, bool *isOkPtr);
 
 /// @brief      Функция добавления имени файла к пути
 /// @details    Данная функция выполняет запись filePtr в bufferPtr размером bufferSize в позицию bufferLength
@@ -28,8 +28,9 @@ static size_t jlsPathSet(const char *pathPtr, char *bufferPtr, size_t bufferSize
 /// @param[in]  bufferPtr    Указатель на буфер, куда будет записан filePtr. Включая \0
 /// @param[in]  bufferLength Позиция, с которой нужно записать filePtr
 /// @param[in]  bufferSize   Размер bufferPtr
+/// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return     Возвращает длину bufferPtr. Включая \0
-static size_t jlsPathAppend(const char *filePtr, char *bufferPtr, size_t bufferLength, size_t bufferSize);
+static size_t jlsPathAppend(const char *filePtr, char *bufferPtr, size_t bufferLength, size_t bufferSize, bool *isOkPtr);
 
 /// @brief      Функция сортировки по возрастанию
 /// @param[in]  a Первый элемент
@@ -54,6 +55,7 @@ int jls(const char *filePtr)
 
     bool isOk = true;
     
+    // Объявление переменных, используемых в cleanup
     fileInfoStruct     fileInfo  = {0};
     jlsFilesListStruct filesList = {0};
 
@@ -62,47 +64,49 @@ int jls(const char *filePtr)
         isOk = false;
         goto cleanup;
     }
-    
-    if (!fileInfoGet(filePtr, &fileInfo))
+
+    fileInfoGet(filePtr, &fileInfo, &isOk);
+    if (!isOk)
     {
-        isOk = false;
         goto cleanup;
     }
 
     if (fileInfo.type != fileInfoTypeDirectory)
     {
-        fileInfoStringLength = fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH);
-        if (!fileInfoStringLength)
+        fileInfoStringLength = fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH, &isOk);
+        if (isOk)
         {
-            isOk = false;
-        }
-        else
-        {
-            jlsPrintFileInfo(&fileInfoString[0], 0);
+            jlsPrintFileInfo(&fileInfoString[0], 0, &isOk);
         }
         goto cleanup;
     }
     
-    filesList = jlsGetFilesList(filePtr);
-    if (!filesList.count)
+    filesList = jlsGetFilesList(filePtr, &isOk);
+    if (!isOk || filesList.count == 0)
     {
-        isOk = false;
         goto cleanup;
     }
-    
-    jlsSortFilesList(&filesList, jlsSortAscend);
-    
+
+    jlsSortFilesList(&filesList, jlsSortAscend, &isOk);
+    if (!isOk)
+    {
+        goto cleanup;
+    }
+
     jlsAlignmentStruct alignment = {0};
 
-    alignment = jlsCalculateAlignment(filePtr, &filesList);
+    alignment = jlsCalculateAlignment(filePtr, &filesList, &isOk);
+    if (!isOk)
+    {
+        goto cleanup;
+    }
 
     char   fullPath[PATH_MAX] = {0};
     size_t pathLength         = 0;
 
-    pathLength = jlsPathSet(filePtr, &fullPath[0], PATH_MAX);
-    if (!pathLength)
+    pathLength = jlsPathSet(filePtr, &fullPath[0], PATH_MAX, &isOk);
+    if (!isOk)
     {
-        isOk = false;
         goto cleanup;
     }
 
@@ -123,25 +127,29 @@ int jls(const char *filePtr)
             fileInfo.targetPtr = 0;
         }
     
-        if (!jlsPathAppend(fileName, &fullPath[0], pathLength, PATH_MAX))
+        jlsPathAppend(fileName, &fullPath[0], pathLength, PATH_MAX, &isOk);
+        if (!isOk)
         {
-            isOk = false;
             goto cleanup;
         }
 
-        if (!fileInfoGet(&fullPath[0], &fileInfo))
+        fileInfoGet(&fullPath[0], &fileInfo, &isOk);
+        if (!isOk)
         {
-            isOk = false;
             goto cleanup;
         }
 
-        fileInfoStringLength = fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH);
-        if (!fileInfoStringLength)
+        fileInfoStringLength = fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH, &isOk);
+        if (!isOk)
         {
-            isOk = false;
             goto cleanup;
         }
-        jlsPrintFileInfo(&fileInfoString[0], &alignment);
+
+        jlsPrintFileInfo(&fileInfoString[0], &alignment, &isOk);
+        if (!isOk)
+        {
+            goto cleanup;
+        }
     }
 
 cleanup:
@@ -183,14 +191,22 @@ cleanup:
     }
 }
 
-void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr)
+void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr, bool *isOkPtr)
 {
     static const char delimer[] = {FILE_INFO_TO_STRING_DELIMER, '\0'};
+    
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
     
     char buffer[JLS_FILE_INFO_MAX_LENGTH] = {0};
 
     if (!fileInfoStringPtr)
     {
+        *isOkPtr = false;
         return;
     }
 
@@ -241,10 +257,116 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
     printf("\n");
 }
 
-void jlsSortFilesList(const jlsFilesListStruct *filesListPtr, jlsSortEnum sort)
+jlsFilesListStruct jlsGetFilesList(const char *dirPtr, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
+    size_t         filesCount      = 0;
+    struct dirent *directoryEntity = {0};
+    
+    // Объявление переменных, используемых в cleanup
+    jlsFilesListStruct answer          = {0};
+    DIR               *directory       = 0;
+
+    filesCount = jlsCountFilesInDirectory(dirPtr, isOkPtr);
+    if (!filesCount || !*isOkPtr)
+    {
+        return answer;
+        goto cleanup;
+    }
+
+    answer.list = calloc(filesCount, sizeof(char *));
+    if (!answer.list)
+    {
+        *isOkPtr = false;
+        goto cleanup;
+    }
+
+    directory = opendir(dirPtr);
+    if (!directory)
+    {
+        *isOkPtr = false;
+        goto cleanup;
+    }
+
+    while ((directoryEntity = readdir(directory)) != NULL) 
+    {
+        if (strcmp(directoryEntity->d_name, ".")  == 0 ||
+            strcmp(directoryEntity->d_name, "..") == 0)
+        {
+            continue;
+        }
+
+        answer.list[answer.count] = malloc(strlen(directoryEntity->d_name) + 1);
+        if (!answer.list[answer.count])
+        {
+            *isOkPtr = false;
+            goto cleanup;
+        }
+
+        strcpy(answer.list[answer.count], directoryEntity->d_name);
+
+        ++answer.count;
+        if (answer.count == filesCount)
+        {
+            // Если количество файлов в директории изменилось за время выполнения функции, обрабатываем не все файлы
+            break;
+        }
+    }
+
+cleanup:
+    if (directory)
+    {
+        closedir(directory);
+    }
+
+    if (!*isOkPtr)
+    {
+        if (answer.list)
+        {
+            for (int i = 0; i < answer.count; ++i)
+            {
+                if (answer.list[i])
+                {
+                    free(answer.list[i]);
+                    answer.list[i] = 0;
+                }
+            }
+        }
+        if (answer.list)
+        {
+            free(answer.list);
+            answer.list = 0;
+        }
+    }
+
+    if (!*isOkPtr)
+    {
+        return answer;
+    }
+    else
+    {
+        return (jlsFilesListStruct){0};
+    }
+}
+
+void jlsSortFilesList(const jlsFilesListStruct *filesListPtr, jlsSortEnum sort, bool *isOkPtr)
+{
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
     if (!filesListPtr || !filesListPtr->list || filesListPtr->count < 2)
     {
+        *isOkPtr = false;
         return;
     }
 
@@ -268,98 +390,15 @@ void jlsSortFilesList(const jlsFilesListStruct *filesListPtr, jlsSortEnum sort)
     }
 }
 
-jlsFilesListStruct jlsGetFilesList(const char *dirPtr)
+size_t jlsCountFilesInDirectory(const char *dirPtr, bool *isOkPtr)
 {
-    jlsFilesListStruct answer          = {0};
-    size_t             filesCount      = 0;
-    DIR               *directory       = 0;
-    struct dirent     *directoryEntity = {0};
-
     bool isOk = true;
 
-    filesCount = jlsCountFilesInDirectory(dirPtr);
-    if (!filesCount)
+    if (!isOkPtr)
     {
-        return answer;
+        isOkPtr = &isOk;
     }
-
-    answer.list = calloc(filesCount, sizeof(char *));
-    if (!answer.list)
-    {
-        isOk = false;
-        goto cleanup;
-    }
-
-    directory = opendir(dirPtr);
-    if (!directory)
-    {
-        isOk = false;
-        goto cleanup;
-    }
-
-    while ((directoryEntity = readdir(directory)) != NULL) 
-    {
-        if (strcmp(directoryEntity->d_name, ".")  == 0 ||
-            strcmp(directoryEntity->d_name, "..") == 0)
-        {
-            continue;
-        }
-
-        answer.list[answer.count] = malloc(strlen(directoryEntity->d_name) + 1);
-        if (!answer.list[answer.count])
-        {
-            isOk = false;
-            goto cleanup;
-        }
-
-        strcpy(answer.list[answer.count], directoryEntity->d_name);
-
-        ++answer.count;
-        if (answer.count == filesCount)
-        {
-            // Если количество файлов в директории изменилось за время выполнения функции, обрабатываем не все файлы
-            break;
-        }
-    }
-
-cleanup:
-    if (directory)
-    {
-        closedir(directory);
-    }
-
-    if (!isOk)
-    {
-        if (answer.list)
-        {
-            for (int i = 0; i < answer.count; ++i)
-            {
-                if (answer.list[i])
-                {
-                    free(answer.list[i]);
-                    answer.list[i] = 0;
-                }
-            }
-        }
-        if (answer.list)
-        {
-            free(answer.list);
-            answer.list = 0;
-        }
-    }
-
-    if (isOk)
-    {
-        return answer;
-    }
-    else
-    {
-        return (jlsFilesListStruct){0};
-    }
-}
-
-size_t jlsCountFilesInDirectory(const char *dirPtr)
-{
+    
     size_t         answer          = 0;
     DIR           *directory       = 0;
     struct dirent *directoryEntity = {0};
@@ -367,6 +406,7 @@ size_t jlsCountFilesInDirectory(const char *dirPtr)
     directory = opendir(dirPtr);
     if (!directory)
     {
+        *isOkPtr = false;
         return answer;
     }
 
@@ -388,26 +428,32 @@ size_t jlsCountFilesInDirectory(const char *dirPtr)
     return answer;
 }
 
-jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesListStruct *filesList)
+jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr)
 {
-    jlsAlignmentStruct answer          = {0};
-    fileInfoStruct     fileInfo        = {0};
-
     bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
+    jlsAlignmentStruct answer = {0};
+    
+    // Объявление переменных, используемых в cleanup
+    fileInfoStruct fileInfo = {0};
 
     if (!pathPtr || !filesList)
     {
-        isOk = false;
+        *isOkPtr = false;
         goto cleanup;
     }
 
     char   fullPath[PATH_MAX] = {0};
     size_t pathLength         = 0;
 
-    pathLength = jlsPathSet(pathPtr, &fullPath[0], PATH_MAX);
-    if (!pathLength)
+    pathLength = jlsPathSet(pathPtr, &fullPath[0], PATH_MAX, isOkPtr);
+    if (!*isOkPtr)
     {
-        isOk = false;
         goto cleanup;
     }
 
@@ -426,21 +472,22 @@ jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesList
             fileInfo.targetPtr = 0;
         }
     
-        if (!jlsPathAppend(filesList->list[i], &fullPath[0], pathLength, PATH_MAX))
+        jlsPathAppend(filesList->list[i], &fullPath[0], pathLength, PATH_MAX, isOkPtr);
+        if (!*isOkPtr)
         {
-            isOk = false;
             goto cleanup;
         }
 
-        if (!fileInfoGet(&fullPath[0], &fileInfo))
+        fileInfoGet(&fullPath[0], &fileInfo, isOkPtr);
+        if (!*isOkPtr)
         {
-            isOk = false;
             goto cleanup;
         }
 
-        if (!fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH))
+        fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH, isOkPtr);
+        if (!*isOkPtr)
         {
-            continue;
+            goto cleanup;
         }
 
         static const char delimer[] = {FILE_INFO_TO_STRING_DELIMER, '\0'};
@@ -501,35 +548,44 @@ cleanup:
     Внутренние функции
 */
 
-static size_t jlsPathSet(const char *pathPtr, char *bufferPtr, size_t bufferSize)
+static size_t jlsPathSet(const char *pathPtr, char *bufferPtr, size_t bufferSize, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     size_t answer = 0;
 
     if (!pathPtr || !bufferPtr || bufferSize < 2)
     {
+        *isOkPtr = false;
         return 0;
     }
 
     memset(bufferPtr, 0, bufferSize);
 
-    if (pathPtr[0] == '/')
-    {
-        answer = snprintf(bufferPtr, bufferSize, "%s", pathPtr);
-    }
-    else
-    {
-        answer = snprintf(bufferPtr, bufferSize, "%s/", pathPtr);
-    }
+    answer = snprintf(bufferPtr, bufferSize, "%s/", pathPtr);
 
     return answer;
 }
 
-static size_t jlsPathAppend(const char *filePtr, char *bufferPtr, size_t bufferLength, size_t bufferSize)
+static size_t jlsPathAppend(const char *filePtr, char *bufferPtr, size_t bufferLength, size_t bufferSize, bool *isOkPtr)
 {
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
     size_t answer = 0;
 
     if (!filePtr || !bufferPtr || bufferSize < bufferLength)
     {
+        *isOkPtr = false;
         return answer;
     }
 
