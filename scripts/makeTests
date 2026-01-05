@@ -198,6 +198,10 @@ function prepare()
     # Тест на корне ФС
     COMMON_TESTS_ARGS_LIST+=("DoubleQuites")
     COMMON_TESTS_ARGS_LIST+=("\"\"")
+
+    # Тест с несколькими аргументами
+    COMMON_TESTS_ARGS_LIST+=("FewArguments")
+    COMMON_TESTS_ARGS_LIST+=("NonExistent1 $COMMON_SCRIPT_DIR/$COMMON_SCRIPT_NAME $COMMON_SCRIPT_DIR NonExistent2 NonExistent3")
     
     local TEST=""
     for TEST in "${TESTS_LIST_SORTED[@]}"
@@ -363,8 +367,12 @@ function performMemoryLeakTest()
         echo -e  "${COMMON_RESET}"
         return 1
     fi
+    
+    local VALGRIND_RESULT=0;
 
-    if ! valgrind --leak-check=full --error-exitcode=1 --log-file="$VALGRIND_OUTPUT_FILE" "$COMMON_JLS" $ARG >> "$JLS_OUTPUT_FILE" 2>&1
+    valgrind --leak-check=full --error-exitcode=3 --log-file="$VALGRIND_OUTPUT_FILE" "$COMMON_JLS" $ARG >> "$JLS_OUTPUT_FILE" 2>&1
+    VALGRIND_RESULT=$?
+    if [[ "$VALGRIND_RESULT" -eq 3 ]]
     then
         echo -en "${COMMON_RED}"
         echo -n  "Failed. Memory-leaks detected"
