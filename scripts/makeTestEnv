@@ -32,7 +32,9 @@ readonly COMMON_TESTS_LIST=(SymlinksWithSpaces
                             EditTimePast
                             WithSpaces
                             OneFileDir
-                            EmptyDir)
+                            EmptyDir
+                            LongName
+                            LongPath)
 
 #
 # Функции
@@ -90,8 +92,9 @@ function prepare()
 
     if [ -d "$COMMON_TESTS_DIR" ]
     then
-        echo "Clearing existing test environment..."
+        echo -n "Clearing existing test environment... "
         rm -r "$COMMON_TESTS_DIR" >> "$COMMON_LOG" 2>&1
+        echo "Done"
     fi
 
     if ! mkdir -p "$COMMON_TESTS_DIR" >> "$COMMON_LOG" 2>&1
@@ -270,7 +273,9 @@ function makeTestDifferentAccess()
                             "DirectoryAccess_775"
                             "DirectoryAccess_777"
                             "DirectoryAccess_1777"
-                            "DirectoryAccess_1666")
+                            "DirectoryAccess_1666"
+                            "DirectoryAccess_6777"
+                            "DirectoryAccess_7777")
     local DIRECTORY=""
     for DIRECTORY in "${DIRECTORIES_LIST[@]}"
     do
@@ -774,6 +779,74 @@ function makeTestOneFileDir()
     if ! echo "File $FILE" > "$COMMON_TESTS_DIR/$TEST_NAME/$FILE"
     then
         echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+        return 1
+    fi
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Длинное название"
+# @details  Данная функция выполняет создание директории с названием LongName
+#               и создает в ней один файл с длинным названием
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestLongName()
+{
+    local TEST_NAME="LongName"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILE=""
+    for ((i = 0; i < 250; i+=4))
+    do
+        FILE+="File"
+    done
+
+    if ! echo "$FILE" > "$COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+        return 1
+    fi
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Длинный путь"
+# @details  Данная функция выполняет создание директории с названием LongPath
+#               и создает в ней одну директорию с длинным названием
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestLongPath()
+{
+    local TEST_NAME="LongPath"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local DIRECTORY=""
+    for ((i = 0; i < 250; i+=3))
+    do
+        DIRECTORY+="Dir"
+    done
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
         return 1
     fi
 

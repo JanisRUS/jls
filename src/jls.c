@@ -87,10 +87,13 @@ int jls(const char *filePtr)
         goto cleanup;
     }
 
-    jlsSortFilesList(&filesList, jlsSortAscend, &isOk);
-    if (!isOk)
+    if (filesList.count >= 2)
     {
-        goto cleanup;
+        jlsSortFilesList(&filesList, jlsSortAscend, &isOk);
+        if (!isOk)
+        {
+            goto cleanup;
+        }
     }
 
     jlsAlignmentStruct alignment = {0};
@@ -345,7 +348,7 @@ cleanup:
         }
     }
 
-    if (!*isOkPtr)
+    if (*isOkPtr)
     {
         return answer;
     }
@@ -598,7 +601,7 @@ static size_t jlsPathAppend(const char *filePtr, char *bufferPtr, size_t bufferL
 
 static int jlsFilesListCompareAscend(const void *a, const void *b)
 {
-    return strcmp(*(const char **)a, *(const char **)b);
+    return strcoll(*(const char **)a, *(const char **)b);
 }
 
 static int jlsFilesListCompareDescend(const void *a, const void *b)

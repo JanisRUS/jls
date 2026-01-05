@@ -103,8 +103,9 @@ function main()
         fi
     done
 
+    local PASSED_COUNT=0
+    local FAILED_COUNT=0
     echo -e "\n\n\nSummary:"
-
     for ((i = 0; i < ${#TESTS_RESULT_LIST[@]}; i+=2))
     do
         local TEST="${TESTS_RESULT_LIST[$i]}"
@@ -115,15 +116,29 @@ function main()
         then
             echo -en "$COMMON_GREEN"
             RESULT="Passed"
+            ((PASSED_COUNT++))
         else
             echo -en "$COMMON_RED"
             RESULT="Failed"
+            ((FAILED_COUNT++))
         fi
 
-        printf "[%*d] %-*s %s" "$TEST_NUMBER_MAX_LENGTH" "$TEST_NUMBER" "$TEST_NAME_MAX_LENGTH" "$TEST" "$RESULT"
+        printf "[%*d] %-*s %s" "$TEST_NUMBER_MAX_LENGTH" "$((TEST_NUMBER + 1))" "$TEST_NAME_MAX_LENGTH" "$TEST" "$RESULT"
 
         echo -e "$COMMON_RESET"
     done
+
+    echo
+
+    echo -en "$COMMON_RED"
+    echo -n  "Failed $FAILED_COUNT/$((${#TESTS_RESULT_LIST[@]}/2))"
+    echo -e  "$COMMON_RESET"
+
+    echo -en "$COMMON_GREEN"
+    echo -n  "Passed $PASSED_COUNT/$((${#TESTS_RESULT_LIST[@]}/2))"
+    echo -e  "$COMMON_RESET"
+
+    echo
 
     return 0
 }
@@ -149,6 +164,17 @@ function prepare()
         return 1
     fi
 
+    local TESTS_LIST=()
+    local TESTS_LIST_SORTED=()
+
+    TESTS_LIST=("$COMMON_TESTS_DIR"/*)
+    mapfile -t TESTS_LIST_SORTED < <(
+        printf '%s\n' "${TESTS_LIST[@]}" \
+        | awk '{ print length, $0 }'     \
+        | sort -rn                       \
+        | cut -d' ' -f2-
+    )
+
     COMMON_TESTS_ARGS_LIST=()
 
     # Тест на текущей директории
@@ -163,8 +189,12 @@ function prepare()
     COMMON_TESTS_ARGS_LIST+=("Root")
     COMMON_TESTS_ARGS_LIST+=("/")
 
+    # Тест на корне ФС
+    COMMON_TESTS_ARGS_LIST+=("DoubleQuites")
+    COMMON_TESTS_ARGS_LIST+=("\"\"")
+    
     local TEST=""
-    for TEST in "$COMMON_TESTS_DIR/"*
+    for TEST in "${TESTS_LIST_SORTED[@]}"
     do
         if [ -d "$TEST" ]
         then
@@ -214,13 +244,14 @@ function performCompareTest()
     local LS_OUTPUT_FILE="$COMMON_TESTS_DIR/${TEST}.ls"
     local DIFF_OUTPUT_FILE="$COMMON_TESTS_DIR/${TEST}.diff"
 
+    echo
+
     echo -en "${COMMON_YELLOW}"
     echo     "=====${TEST}====="
     echo     "ARG              is $ARG"
     echo     "JLS_OUTPUT_FILE  is $JLS_OUTPUT_FILE"
     echo     "LS_OUTPUT_FILE   is $LS_OUTPUT_FILE"
-    echo     "DIFF_OUTPUT_FILE is $DIFF_OUTPUT_FILE"
-    echo     "Command: \"$COMMON_JLS\" $ARG >> \"$JLS_OUTPUT_FILE\" 2>&1"
+    echo -n  "DIFF_OUTPUT_FILE is $DIFF_OUTPUT_FILE"
     echo -e  "${COMMON_RESET}"
 
     if ! truncate -s 0 "$JLS_OUTPUT_FILE" >> /dev/null 2>&1
@@ -247,8 +278,20 @@ function performCompareTest()
         return 1
     fi
 
-    "$COMMON_JLS" $ARG >> "$JLS_OUTPUT_FILE" 2>&1
-    ls -l         $ARG >> "$LS_OUTPUT_FILE"  2>&1
+    local JLS_TIME=""
+    local  LS_TIME=""
+    TIMEFORMAT='%R'
+    JLS_TIME=$({ time ("$COMMON_JLS" $ARG >> "$JLS_OUTPUT_FILE" 2>&1); } 2>&1)
+    LS_TIME=$({  time (ls -l         $ARG >> "$LS_OUTPUT_FILE"  2>&1); } 2>&1)
+
+    echo "jls   run time is: $JLS_TIME sec"
+    echo "ls -l run time is: $LS_TIME sec"
+
+    # TODO Удалить после добавления рассчета total
+    if [[ $(wc -l < "$LS_OUTPUT_FILE") -gt 1 ]]
+    then
+        sed -i '1d' "$LS_OUTPUT_FILE"
+    fi
 
     if ! diff  "$LS_OUTPUT_FILE" "$JLS_OUTPUT_FILE" >> "$DIFF_OUTPUT_FILE" 2>&1
     then
@@ -297,11 +340,12 @@ function performMemoryLeakTest()
     local VALGRIND_OUTPUT_FILE="$COMMON_TESTS_DIR/${TEST}.valgrind"
     local JLS_OUTPUT_FILE="/tmp/$COMMON_SCRIPT_NAME.jls.output"
 
+    echo
+
     echo -en "${COMMON_YELLOW}"
     echo     "=====${TEST}====="
     echo     "ARG                  is $ARG"
-    echo     "VALGRIND_OUTPUT_FILE is $VALGRIND_OUTPUT_FILE"
-    echo     "Command: valgrind --leak-check=full --error-exitcode=1 --log-file=\"$VALGRIND_OUTPUT_FILE\" \"$COMMON_JLS\" $ARG >> /dev/null 2>&1"
+    echo -n  "VALGRIND_OUTPUT_FILE is $VALGRIND_OUTPUT_FILE"
     echo -e  "${COMMON_RESET}"
 
     if ! truncate -s 0 "$VALGRIND_OUTPUT_FILE" >> /dev/null 2>&1

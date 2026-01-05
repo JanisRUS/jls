@@ -602,7 +602,7 @@ size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTyp
 
     stringPtr[answer++] = accessPtr->owner.bits.read  ? 'r' : '-';
     stringPtr[answer++] = accessPtr->owner.bits.write ? 'w' : '-';
-    if (type == fileInfoTypeFile && accessPtr->owner.bits.special)
+    if (accessPtr->owner.bits.special)
     {
         stringPtr[answer++] = accessPtr->owner.bits.execute ? 's' : 'S';
     }
@@ -613,7 +613,7 @@ size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTyp
 
     stringPtr[answer++] = accessPtr->group.bits.read  ? 'r' : '-';
     stringPtr[answer++] = accessPtr->group.bits.write ? 'w' : '-';
-    if (type == fileInfoTypeFile && accessPtr->group.bits.special)
+    if (accessPtr->group.bits.special)
     {
         stringPtr[answer++] = accessPtr->group.bits.execute ? 's' : 'S';
     }
@@ -624,7 +624,7 @@ size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTyp
 
     stringPtr[answer++] = accessPtr->other.bits.read  ? 'r' : '-';
     stringPtr[answer++] = accessPtr->other.bits.write ? 'w' : '-';
-    if (type == fileInfoTypeDirectory && accessPtr->other.bits.special)
+    if (accessPtr->other.bits.special)
     {
         stringPtr[answer++] = accessPtr->other.bits.execute ? 't' : 'T';
     }

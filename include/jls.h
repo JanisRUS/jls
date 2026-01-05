@@ -20,7 +20,7 @@
 */
 
 /// @brief      Максимальная длина строки со всей информацией о файле
-#define JLS_FILE_INFO_MAX_LENGTH 256
+#define JLS_FILE_INFO_MAX_LENGTH 500
 
 /*
     Перечисления

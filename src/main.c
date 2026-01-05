@@ -39,9 +39,9 @@ int main(int argc, char *argv[])
     if (argc > 1)
     {
         char  *lastArgumentPtr = 0;
-        
+
         lastArgumentPtr = argv[argc - 1];
-        
+
         free(filePtr);
         
         // Для \0
