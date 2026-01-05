@@ -91,7 +91,8 @@ typedef struct fileInfoStruct
     char                *targetPtr;      ///< Указатель на строку с путем к цели ссылки
     size_t               targetLength;   ///< Длина targetPtr
     bool                 isTargetExists; ///< Флаг существования цели ссылки
-    int64_t              blocks;         ///< Количество занимаемых файлом блоков
+    int64_t              blocks;         ///< Количество занимаемых файлом 1024 байтовых блоков
+    __uint64_t           deviceNumber;   ///< Номер устройства
 } fileInfoStruct;
 
 #pragma pack (pop)
@@ -169,10 +170,22 @@ uint32_t fileInfoGetGroupId(bool *isOkPtr);
 /// @return     Возвращает размер активного файла
 uint32_t fileInfoGetSize(bool *isOkPtr);
 
+/// @brief      Функция получения номера устройства
+/// @details    Данная функция выполняет получение номера устройства активного файла
+/// @param[out] isOkPtr Указатель на флаг успешного выполнения операции. Может быть равен 0
+/// @return     Возвращает номер устройства активного файла
+__uint64_t fileInfoGetDeviceNumber(bool *isOkPtr);
+
+/// @brief      Функция получения размера файла
+/// @details    Данная функция выполняет получение размера активного файла
+/// @param[out] isOkPtr Указатель на флаг успешного выполнения операции. Может быть равен 0
+/// @return     Возвращает размер активного файла
+uint32_t fileInfoGetSize(bool *isOkPtr);
+
 /// @brief      Функция получения времени изменения файла
 /// @details    Данная функция выполняет получение времени последнего изменения активного файла
 /// @param[out] isOkPtr Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает размер активного файла
+/// @return     Возвращает время изменения активного файла
 time_t fileInfoGetTimeEdit(bool *isOkPtr);
 
 /// @brief      Функция получения цели символической ссылки
@@ -184,10 +197,10 @@ time_t fileInfoGetTimeEdit(bool *isOkPtr);
 size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения количества занимаемых блоков
-/// @details    Данная функция выполняет получение количества занимаемых активным файлом блоков
+/// @details    Данная функция выполняет получение количества занимаемых активным файлом 1024 байтовых блоков
 /// @param[out] isOkPtr Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return     Возвращает количество занимаемых активным файлом блоков
-uint32_t fileInfoGetBlocks(bool *isOkPtr);
+uint32_t fileInfoGet1204BytesBlocks(bool *isOkPtr);
 
 /*
     Прототипы функций получения строкового представления информации о файле
@@ -261,6 +274,15 @@ size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringL
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return     Возвращает количество записанных данных в stringPtr
 size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength, bool *isOkPtr);
+
+/// @brief      Функция получения строкового размера файла
+/// @details    Данная функция выполняет запись size в строку stringPtr длинной stringLength
+/// @param[in]  deviceNumber Номер устройства
+/// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
+/// @param[in]  stringLength Длина строки stringPtr
+/// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
+/// @return     Возвращает количество записанных данных в stringPtr
+size_t fileInfoToStringDeviceNumber(__uint64_t deviceNumber, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления времени последнего изменения файла
 /// @details    Данная функция выполняет перевод timeEdit в строку stringPtr длинной stringLength

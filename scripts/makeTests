@@ -287,12 +287,6 @@ function performCompareTest()
     echo "jls   run time is: $JLS_TIME sec"
     echo "ls -l run time is: $LS_TIME sec"
 
-    # TODO Удалить после добавления рассчета total
-    if [[ $(wc -l < "$LS_OUTPUT_FILE") -gt 1 ]]
-    then
-        sed -i '1d' "$LS_OUTPUT_FILE"
-    fi
-
     if ! diff  "$LS_OUTPUT_FILE" "$JLS_OUTPUT_FILE" >> "$DIFF_OUTPUT_FILE" 2>&1
     then
         echo -en "${COMMON_RED}"

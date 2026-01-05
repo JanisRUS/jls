@@ -14,6 +14,8 @@
 #include <libgen.h>
 #include <stdlib.h>
 #include <math.h>
+#include <inttypes.h>
+#include <sys/sysmacros.h>
 
 /*
     Константы
@@ -137,14 +139,20 @@ void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool *isOkPtr
     {
         goto cleanup;
     }
+    
+    fileInfoPtr->deviceNumber = fileInfoGetDeviceNumber(isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
 
     fileInfoPtr->timeEdit = fileInfoGetTimeEdit(isOkPtr);
     if (!*isOkPtr)
     {
         goto cleanup;
     }
-
-    fileInfoPtr->blocks = fileInfoGetBlocks(isOkPtr);
+    
+    fileInfoPtr->blocks = fileInfoGet1204BytesBlocks(isOkPtr);
     if (!*isOkPtr)
     {
         goto cleanup;
@@ -380,6 +388,24 @@ uint32_t fileInfoGetSize(bool *isOkPtr)
     return fileInfoStat.st_size;
 }
 
+__uint64_t fileInfoGetDeviceNumber(bool *isOkPtr)
+{
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
+    if (!fileInfoPath)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
+
+    return fileInfoStat.st_rdev;
+}
+
 time_t fileInfoGetTimeEdit(bool *isOkPtr)
 {
     bool isOk = true;
@@ -430,7 +456,7 @@ size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength, bool *isOkPtr
     return (size_t)answer;
 }
 
-uint32_t fileInfoGetBlocks(bool *isOkPtr)
+uint32_t fileInfoGet1204BytesBlocks(bool *isOkPtr)
 {
     bool isOk = true;
 
@@ -512,10 +538,21 @@ size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size
     answer += length;
     stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
 
-    length = fileInfoToStringSize(fileInfoPtr->size, &stringPtr[answer], stringLength - answer, isOkPtr);
-    if (!*isOkPtr)
+    if (fileInfoPtr->type != fileInfoTypeBlock && fileInfoPtr->type != fileInfoTypeChar)
     {
-        return 0;
+        length = fileInfoToStringSize(fileInfoPtr->size, &stringPtr[answer], stringLength - answer, isOkPtr);
+        if (!*isOkPtr)
+        {
+            return 0;
+        }
+    }
+    else
+    {
+        length = fileInfoToStringDeviceNumber(fileInfoPtr->deviceNumber, &stringPtr[answer], stringLength - answer, isOkPtr);
+        if (!*isOkPtr)
+        {
+            return 0;
+        }
     }
     answer += length;
     stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
@@ -551,7 +588,7 @@ size_t fileInfoToStringType(fileInfoTypesEnum type, char *stringPtr, size_t stri
 {
     static const char typeToStringList[fileInfoTypeCount] =
     {
-        ' ',
+        '?',
         'd',
         'c',
         'b',
@@ -655,7 +692,7 @@ size_t fileInfoToStringLinksCount(uint32_t linksCount, char *stringPtr, size_t s
         return 0;
     }
     
-    answer = snprintf(stringPtr, stringLength, "%u", linksCount);
+    answer = snprintf(stringPtr, stringLength, "%" PRIu32, linksCount);
     stringPtr[answer++] = '\0';
 
     return answer;
@@ -691,7 +728,7 @@ size_t fileInfoToStringOwnerId(uint32_t ownerId, char *stringPtr, size_t stringL
     }
     else
     {
-        answer = snprintf(stringPtr, stringLength, "%u", ownerId);
+        answer = snprintf(stringPtr, stringLength, "%" PRIu32, ownerId);
     }
     stringPtr[answer++] = '\0';
 
@@ -727,7 +764,7 @@ size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringL
     }
     else
     {
-        answer = snprintf(stringPtr, stringLength, "%u", groupId);
+        answer = snprintf(stringPtr, stringLength, "%" PRIu32, groupId);
     }
     stringPtr[answer++] = '\0';
 
@@ -751,7 +788,30 @@ size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength,
         return 0;
     }
     
-    answer = snprintf(stringPtr, stringLength, "%u", size);
+    answer = snprintf(stringPtr, stringLength, "%" PRIu32, size);
+    stringPtr[answer++] = '\0';
+
+    return answer;
+}
+
+size_t fileInfoToStringDeviceNumber(__uint64_t deviceNumber, char *stringPtr, size_t stringLength, bool *isOkPtr)
+{
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+    
+    size_t answer = 0;
+    
+    if (!stringPtr || stringLength < 1)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
+    
+    answer = snprintf(stringPtr, stringLength, "%d, %d", major(deviceNumber), minor(deviceNumber));
     stringPtr[answer++] = '\0';
 
     return answer;

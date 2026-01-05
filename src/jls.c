@@ -8,6 +8,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <linux/limits.h>
+#include <inttypes.h>
 
 /*
     Прототипы внутренних функций
@@ -84,6 +85,7 @@ int jls(const char *filePtr)
     filesList = jlsGetFilesList(filePtr, &isOk);
     if (!isOk || filesList.count == 0)
     {
+        printf("total 0\n");
         goto cleanup;
     }
 
@@ -104,6 +106,14 @@ int jls(const char *filePtr)
         goto cleanup;
     }
 
+    uint64_t total = 0;
+
+    total = jlsCalculate512ByteBlocks(filePtr, &filesList, &isOk);
+    if (!isOk)
+    {
+        goto cleanup;
+    }
+
     char   fullPath[PATH_MAX] = {0};
     size_t pathLength         = 0;
 
@@ -112,6 +122,8 @@ int jls(const char *filePtr)
     {
         goto cleanup;
     }
+
+    printf("total %" PRIu64 "\n", total);
 
     for (int i = 0; i < filesList.count; ++i)
     {
@@ -544,6 +556,94 @@ cleanup:
     else
     {
         return (jlsAlignmentStruct){0};
+    }
+}
+
+uint32_t jlsCalculate512ByteBlocks(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr)
+{
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
+    uint32_t answer = {0};
+    
+    // Объявление переменных, используемых в cleanup
+    fileInfoStruct fileInfo = {0};
+
+    if (!pathPtr || !filesList)
+    {
+        *isOkPtr = false;
+        goto cleanup;
+    }
+
+    char   fullPath[PATH_MAX] = {0};
+    size_t pathLength         = 0;
+
+    pathLength = jlsPathSet(pathPtr, &fullPath[0], PATH_MAX, isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
+
+    for (int i = 0; i < filesList->count; ++i)
+    {
+        static char fileInfoString[JLS_FILE_INFO_MAX_LENGTH] = {0};
+
+        if (fileInfo.fileNamePtr)
+        {
+            free(fileInfo.fileNamePtr);
+            fileInfo.fileNamePtr = 0;
+        }
+        if (fileInfo.targetPtr)
+        {
+            free(fileInfo.targetPtr);
+            fileInfo.targetPtr = 0;
+        }
+    
+        jlsPathAppend(filesList->list[i], &fullPath[0], pathLength, PATH_MAX, isOkPtr);
+        if (!*isOkPtr)
+        {
+            goto cleanup;
+        }
+
+        if (!fileInfoSetActiveFile(&fullPath[0]))
+        {
+            goto cleanup;
+        }
+
+        answer += fileInfoGet1204BytesBlocks(isOkPtr);
+        if (!*isOkPtr)
+        {
+            goto cleanup;
+        }
+    }
+
+cleanup:
+    if (fileInfo.fileNamePtr)
+    {
+        free(fileInfo.fileNamePtr);
+        fileInfo.fileNamePtr = 0;
+    }
+
+    if (fileInfo.targetPtr)
+    {
+        free(fileInfo.targetPtr);
+        fileInfo.targetPtr = 0;
+    }
+
+    fileInfoClearActiveFile();
+
+    if (isOk)
+    {
+        answer /= 2;
+        return answer;
+    }
+    else
+    {
+        return 0;
     }
 }
 

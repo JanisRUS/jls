@@ -13,6 +13,7 @@
 #define _JLS_H_
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdbool.h>
 
 /*
@@ -112,6 +113,16 @@ size_t jlsCountFilesInDirectory(const char *dirPtr, bool *isOkPtr);
 /// @param[out] isOkPtr   Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return    Возвращает структуру с максимальными размерами всех полей информации о файле
 jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr);
+
+/// @brief      Функция расчета количества занимаемых файлами 1кб блоков
+/// @details    Данная функция выполняет последовательное получение информации о 
+///                 количестве занимаемых файлами 1024 байтовых блоках, 
+///                 суммирует эти значения и делит пополам
+/// @param[in]  pathPtr   Указатель на директорию с файлами
+/// @param[in]  filesList Список файлов в указанной директории
+/// @param[out] isOkPtr   Указатель на флаг успешного выполнения операции. Может быть равен 0
+/// @return    Возвращает количество занимаемых файлами 512 байтовых блоков 
+uint32_t jlsCalculate512ByteBlocks(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr);
 
 // _JLS_H_
 #endif
