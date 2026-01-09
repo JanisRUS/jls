@@ -4,9 +4,6 @@
 # @brief    Скрипт проведения тестов для проверки утилиты jls
 # @param    arg Путь до jls
 
-# Для подавления ошибок jls типа Aborted (core dumped)
-set +o notify
-
 #
 # Константы
 #
@@ -292,16 +289,13 @@ function performCompareTest()
     local  LS_INFO=""
     local TMP_FILE="/tmp/$COMMON_SCRIPT_NAME.info"    
 
-    /usr/bin/time -q -f "uptime=%e sec  peak-memory=%M KiB" -o "$TMP_FILE" "$COMMON_JLS" $ARG >> "$JLS_OUTPUT_FILE" 2>&1
+    /usr/bin/time -q -f "uptime=%e sec | peak-memory=%M KiB" -o "$TMP_FILE" "$COMMON_JLS" $ARG >> "$JLS_OUTPUT_FILE" 2>&1
     JLS_INFO=$(< "$TMP_FILE")
     rm -f "$TMP_FILE"
 
-    /usr/bin/time -q -f "uptime=%e sec  peak-memory=%M KiB" -o "$TMP_FILE" ls -l $ARG >> "$LS_OUTPUT_FILE" 2>&1
+    /usr/bin/time -q -f "uptime=%e sec | peak-memory=%M KiB" -o "$TMP_FILE" ls -l $ARG >> "$LS_OUTPUT_FILE" 2>&1
     LS_INFO=$(< "$TMP_FILE")
     rm -f "$TMP_FILE"
-
-    #JLS_INFO=$( /usr/bin/time -f "uptime=%e sec; peak-memory=%M KiB" "$COMMON_JLS" "$ARG" >> "$JLS_OUTPUT_FILE" 2>&1 )
-    #LS_INFO=$(  /usr/bin/time -f "uptime=%e sec; peak-memory=%M KiB" ls -l         "$ARG" >> "$LS_OUTPUT_FILE"  2>&1 )
 
     echo "jls info: $JLS_INFO"
     echo "ls  info: $LS_INFO"

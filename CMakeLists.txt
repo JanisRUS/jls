@@ -16,14 +16,12 @@ else()
 endif()
 
 # Проверка наличия в системе valgrind
-if (ENABLE_TESTING)
-    find_program(VALGRIND valgrind)
-    if (VALGRIND)
-        message(STATUS "Valgrind found: ${VALGRIND}")
-    else()
-        message(STATUS "Valgrind not found. Memory-leak tests is unavailable")
-        message(STATUS "Command to install this package:\n\t sudo apt install valgrind")
-    endif()
+find_program(VALGRIND valgrind)
+if (VALGRIND)
+    message(STATUS "Valgrind found: ${VALGRIND}")
+else()
+    message(STATUS "Valgrind not found. Memory-leak tests is unavailable")
+    message(STATUS "Command to install this package:\n\t sudo apt install valgrind")
 endif()
 
 # Основные настройки проекта
