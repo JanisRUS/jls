@@ -3,10 +3,13 @@
 /// @details    Порядок работы с модулем:<br>
 ///                 1) jls() для сбора и вывода информации о файле/файлах в директории<br>
 ///                 2) jlsPrintFileInfo() для вывода информации о файле<br>
-///                 3) jlsGetFilesList() для получения списка файлов в директории<br>
-///                 4) jlsSortFilesList() для сортировки списка файлов<br>
-///                 5) jlsCountFilesInDirectory() для подсчета количества файлов в директории<br>
-///                 6) jlsCalculateAlignment() для расчета максимальных размеров полей информации о файле<br>
+///                 3) jlsGetCommonInfo() для получения общей информации о файлах в директории<br>
+///                 4) jlsGetFilesList() для получения списка файлов в директории<br>
+///                 5) jlsSortFilesList() для сортировки списка файлов<br>
+///                 6) jlsCountFilesInDirectory() для подсчета количества файлов в директории<br>
+///                 7) jlsCalculateAlignment() для расчета максимальных размеров полей информации о файле<br>
+/// @note       Для настройки вывода, модулем используются следующие переменные:<br>
+///                 1) TODO<br>
 /// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #ifndef _JLS_H_
@@ -35,6 +38,15 @@ typedef enum jlsSortEnum
     jlsSortDescend ///< Сортировка по возрастанию
 }jlsSortEnum;
 
+/// @brief      Перечисление типов безопасного режима
+typedef enum jlsSafeTypesEnum
+{
+    jlsSafeTypeNone   = 0, ///< Безопасный режим не нужен
+    jlsSafeTypeName   = 1, ///< Безопасный режим нужен для имени файла
+    jlsSafeTypeTarget = 2, ///< Безопасный режим нужен для цели ссылки
+    jlsSafeTypeBoth   = 3  ///< Безопасный режим нужен и для имени файла и для цели ссылки
+}jlsSafeTypesEnum;
+
 /*
     Структуры
 */
@@ -57,6 +69,15 @@ typedef struct jlsFilesListStruct
     size_t count; ///< Количество файлов
 }jlsFilesListStruct;
 
+/// @brief      Структура общей информации о файле/файлах в директории
+typedef struct jlsCommonInfoStruct
+{
+    jlsFilesListStruct files;     ///< Список файлов
+    jlsAlignmentStruct alignment; ///< Максимальный размер полей информации о файле
+    jlsSafeTypesEnum   safeType;  ///< Безопасный режим
+    uint64_t           total;     ///< Количество занимаемых файлами 1024 байтовых блоков
+}jlsCommonInfoStruct;
+
 #pragma pack (pop)
 
 /*
@@ -77,9 +98,23 @@ int jls(const char *filePtr);
 /// @param[in]  fileInfoStringPtr Указатель на строку с информацией о файле
 /// @warning    Строка fileInfoStringPtr должна соответствовать строке, получаемой при помощи fileInfoToString()
 /// @param[in]  alignmentPtr      Указатель структуру максимальных размеров полей информации о файле
+/// @param[in]  safeType          Тип безопасного режима
+/// @note       Можно отключить при помощи сброса jlsIsSafeModeEnabled
 /// @param[out] isOkPtr           Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @note       Указатель alignmentPtr может быть равен 0
-void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr, bool *isOkPtr);
+void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr, jlsSafeTypesEnum safeType, bool *isOkPtr);
+
+/// @brief      Функция получения общей информациии о файлах в директории
+/// @details    Данная функция выполняет получение общей информации о файлах в директории
+/// @note       Список информации:<br>
+///                 1) Список файлов<br>
+///                 2) Максимальный размер полей информации о файлах<br>
+///                 3) Необходимый безопасный режим<br>
+///                 4) Количество занимаемых файлами 1024 байтовых блоков
+/// @param[in]  dirPtr  Указатель на директорию
+/// @param[out] isOkPtr Указатель на флаг успешного выполнения операции. Может быть равен 0
+/// @return     Возвращает список общей информации о файлах в директории
+jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr);
 
 /// @brief      Функция получения списка файлов в указанной директории
 /// @details    Данная функция выполняет последовательное формирование списка файлов, игнорируя . и ..
@@ -95,7 +130,7 @@ jlsFilesListStruct jlsGetFilesList(const char *dirPtr, bool *isOkPtr);
 /// @param[in]  filesListPtr Указатель на список файлов
 /// @param[in]  sort         Тип сортировки
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-void jlsSortFilesList(const jlsFilesListStruct *filesListPtr, jlsSortEnum sort, bool *isOkPtr);
+void jlsSortFilesList(jlsFilesListStruct *filesListPtr, jlsSortEnum sort, bool *isOkPtr);
 
 /// @brief      Функция подсчета количества файлов в директории
 /// @details    Данная функция выполняет последовательный подсчет количества файлов в директории, игнорируя . и .. 
@@ -114,15 +149,44 @@ size_t jlsCountFilesInDirectory(const char *dirPtr, bool *isOkPtr);
 /// @return    Возвращает структуру с максимальными размерами всех полей информации о файле
 jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr);
 
-/// @brief      Функция расчета количества занимаемых файлами 1кб блоков
+/// @brief      Функция вычисления безопасного режима
+/// @details    Данная функция выполняет проверку всех имен файлов и целей ссылок.
+///                 В зависимости от того, что из них требует вывода одинарных кавычек,
+///                 возвращает нужный для их отображения безопасный режим
+/// @param[in]  pathPtr   Указатель на директорию с файлами
+/// @param[in]  filesList Список файлов в указанной директории
+/// @param[out] isOkPtr   Указатель на флаг успешного выполнения операции. Может быть равен 0
+/// @return     Возвращает необходимый для отображения filesList безопасный режим
+jlsSafeTypesEnum jlsCalculateSafeType(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr);
+
+/// @brief      Функция расчета количества занимаемых файлами 1024 байтовых блоков
 /// @details    Данная функция выполняет последовательное получение информации о 
-///                 количестве занимаемых файлами 1024 байтовых блоках, 
+///                 количестве занимаемых файлами 512 байтовых блоках,
 ///                 суммирует эти значения и делит пополам
 /// @param[in]  pathPtr   Указатель на директорию с файлами
 /// @param[in]  filesList Список файлов в указанной директории
 /// @param[out] isOkPtr   Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return    Возвращает количество занимаемых файлами 512 байтовых блоков 
-uint32_t jlsCalculate512ByteBlocks(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr);
+/// @return    Возвращает количество занимаемых файлами 1024 байтовых блоков 
+uint64_t jlsCalculate1024ByteBlocks(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr);
+
+/// @brief      Функция преобразования строки в безопасный вариант
+/// @details    Данная функция выполняет экранирование строки stringPtr в соответствии
+///                 с её запрещенными символами и записывает результат в safePtr
+/// @param[in]  stringPtr     Указатель на строку
+/// @param[out] safePtr       Указатель на строку в безопасном варианте
+/// @param[in]  safePtrLength Длина safePtrLength
+/// @param[out] isOkPtr       Указатель на флаг успешного выполнения операции. Может быть равен 0
+/// @return    Возвращает количество записанных в safePtr данных
+size_t jlsMakeStringSafe(const char *stringPtr, char *safePtr, size_t safePtrLength, bool *isOkPtr);
+
+/*
+    Переменные
+*/
+
+/// @brief      Флаг вывода информации в безопасном режиме
+/// @details    Если установлен, названия файлов с запрещенными символами будут выведены в одиночных кавычках
+/// @note       По умолчанию выключен
+extern bool jlsIsSafeModeEnabled;
 
 // _JLS_H_
 #endif

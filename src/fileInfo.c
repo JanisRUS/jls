@@ -152,7 +152,7 @@ void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool *isOkPtr
         goto cleanup;
     }
     
-    fileInfoPtr->blocks = fileInfoGet1204BytesBlocks(isOkPtr);
+    fileInfoPtr->blocks = fileInfoGet512BytesBlocks(isOkPtr);
     if (!*isOkPtr)
     {
         goto cleanup;
@@ -456,7 +456,7 @@ size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength, bool *isOkPtr
     return (size_t)answer;
 }
 
-uint32_t fileInfoGet1204BytesBlocks(bool *isOkPtr)
+uint32_t fileInfoGet512BytesBlocks(bool *isOkPtr)
 {
     bool isOk = true;
 
@@ -475,7 +475,7 @@ uint32_t fileInfoGet1204BytesBlocks(bool *isOkPtr)
 }
 
 /*
-    Функции получения строкового представления информации о файле
+    Внешние получения строкового представления информации о файле
 */
 
 size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t stringLength, bool *isOkPtr)
