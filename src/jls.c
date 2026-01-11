@@ -9,6 +9,9 @@
 #include <dirent.h>
 #include <linux/limits.h>
 #include <inttypes.h>
+#include <stddef.h>
+#include <wchar.h>
+#include <wctype.h>
 
 /*
     Прототипы внутренних функций
@@ -45,6 +48,20 @@ static int jlsFilesListCompareAscend(const void *a, const void *b);
 /// @return     Возвращает результат выполнения jlsFilesListCompareAscend(b, a)
 static int jlsFilesListCompareDescend(const void *a, const void *b);
 
+/// @brief      Функция проверки строки на небезопасные символы
+/// @details    Выполняет посимвольную проверку stringPtr на наличие небезопасных символов
+/// @param[in]  stringPtr Указатель на строку
+/// @param[out] isOkPtr   Указатель на флаг успешного выполнения операции. Может быть равен 0
+/// @return     Возвращает true если в строке есть небезопасные символы.
+///                 В противном случае, возвращает false
+static bool jlsCheckIsUnsafe(const char *stringPtr, bool *isOkPtr);
+
+/*
+    Переменные
+*/
+
+bool jlsIsSafeModeEnabled = false;
+
 /*
     Функции
 */
@@ -57,8 +74,8 @@ int jls(const char *filePtr)
     bool isOk = true;
     
     // Объявление переменных, используемых в cleanup
-    fileInfoStruct     fileInfo  = {0};
-    jlsFilesListStruct filesList = {0};
+    fileInfoStruct      fileInfo   = {0};
+    jlsCommonInfoStruct commonInfo = {0};
 
     if (!filePtr)
     {
@@ -93,41 +110,53 @@ int jls(const char *filePtr)
         fileInfoStringLength = fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH, &isOk);
         if (isOk)
         {
-            jlsPrintFileInfo(&fileInfoString[0], 0, &isOk);
+            bool             isFileUnsafe   = false;
+            bool             isTargetUnsafe = false;
+            jlsSafeTypesEnum safeType       = jlsSafeTypeNone;
+
+            isFileUnsafe = jlsCheckIsUnsafe(fileInfo.fileNamePtr, &isOk);
+            if (!isOk)
+            {
+                goto cleanup;
+            }
+
+            if (fileInfo.type == fileInfoTypeLink)
+            {
+                isTargetUnsafe = jlsCheckIsUnsafe(fileInfo.targetPtr, &isOk);
+                if (!isOk)
+                {
+                    goto cleanup;
+                }
+            }
+
+            if (isFileUnsafe)
+            {
+                safeType += jlsSafeTypeName;
+            }
+            if (isTargetUnsafe)
+            {
+                safeType += jlsSafeTypeTarget;
+            }
+
+            jlsPrintFileInfo(&fileInfoString[0], 0, safeType, &isOk);
         }
         goto cleanup;
     }
     
-    filesList = jlsGetFilesList(filePtr, &isOk);
-    if (!isOk || filesList.count == 0)
+    commonInfo = jlsGetCommonInfo(filePtr, &isOk);
+    if (!isOk || !commonInfo.files.count)
     {
         printf("total 0\n");
         goto cleanup;
     }
 
-    if (filesList.count >= 2)
+    if (commonInfo.files.count >= 2)
     {
-        jlsSortFilesList(&filesList, jlsSortAscend, &isOk);
+        jlsSortFilesList(&commonInfo.files, jlsSortAscend, &isOk);
         if (!isOk)
         {
             goto cleanup;
         }
-    }
-
-    jlsAlignmentStruct alignment = {0};
-
-    alignment = jlsCalculateAlignment(filePtr, &filesList, &isOk);
-    if (!isOk)
-    {
-        goto cleanup;
-    }
-
-    uint64_t total = 0;
-
-    total = jlsCalculate512ByteBlocks(filePtr, &filesList, &isOk);
-    if (!isOk)
-    {
-        goto cleanup;
     }
 
     char   fullPath[PATH_MAX] = {0};
@@ -139,13 +168,13 @@ int jls(const char *filePtr)
         goto cleanup;
     }
 
-    printf("total %" PRIu64 "\n", total);
+    printf("total %" PRIu64 "\n", commonInfo.total);
 
-    for (int i = 0; i < filesList.count; ++i)
+    for (int i = 0; i < commonInfo.files.count; ++i)
     {
         char *fileName = 0;
 
-        fileName = filesList.list[i];
+        fileName = commonInfo.files.list[i];
 
         if (fileInfo.fileNamePtr)
         {
@@ -176,7 +205,7 @@ int jls(const char *filePtr)
             goto cleanup;
         }
 
-        jlsPrintFileInfo(&fileInfoString[0], &alignment, &isOk);
+        jlsPrintFileInfo(&fileInfoString[0], &commonInfo.alignment, commonInfo.safeType, &isOk);
         if (!isOk)
         {
             goto cleanup;
@@ -195,21 +224,21 @@ cleanup:
         fileInfo.targetPtr = 0;
     }
 
-    if (filesList.list)
+    if (commonInfo.files.list)
     {
-        for (int i = 0; i < filesList.count; ++i)
+        for (int i = 0; i < commonInfo.files.count; ++i)
         {
-            if (filesList.list[i])
+            if (commonInfo.files.list[i])
             {
-                free(filesList.list[i]);
-                filesList.list[i] = 0;
+                free(commonInfo.files.list[i]);
+                commonInfo.files.list[i] = 0;
             }
         }
     }
-    if (filesList.list)
+    if (commonInfo.files.list)
     {
-        free(filesList.list);
-        filesList.list = 0;
+        free(commonInfo.files.list);
+        commonInfo.files.list = 0;
     }
 
     if (isOk)
@@ -222,7 +251,7 @@ cleanup:
     }
 }
 
-void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr, bool *isOkPtr)
+void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr, jlsSafeTypesEnum safeType, bool *isOkPtr)
 {
     static const char delimer[] = {FILE_INFO_TO_STRING_DELIMER, '\0'};
     
@@ -232,6 +261,8 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
     
     char buffer[JLS_FILE_INFO_MAX_LENGTH] = {0};
 
@@ -271,21 +302,327 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
     fileInfoStringFilePtr       = strtok(NULL,       delimer);
     fileInfoStringTargetPtr     = strtok(NULL,       delimer);
 
-    printf("%s%s %*s %-*s %-*s %*s %s %s", fileInfoStringTypePtr,
-                                           fileInfoStringAccessPtr,
-            (int)alignmentPtr->linksCount, fileInfoStringLinksCountPtr,
-            (int)alignmentPtr->owner,      fileInfoStringOwnerPtr,
-            (int)alignmentPtr->group,      fileInfoStringGroupPtr,
-            (int)alignmentPtr->size,       fileInfoStringSizePtr,
-                                           fileInfoStringTimeEditPtr,
-                                           fileInfoStringFilePtr);
+    printf("%s%s %*s %-*s %-*s %*s %s ", fileInfoStringTypePtr,
+                                         fileInfoStringAccessPtr,
+          (int)alignmentPtr->linksCount, fileInfoStringLinksCountPtr,
+          (int)alignmentPtr->owner,      fileInfoStringOwnerPtr,
+          (int)alignmentPtr->group,      fileInfoStringGroupPtr,
+          (int)alignmentPtr->size,       fileInfoStringSizePtr,
+                                         fileInfoStringTimeEditPtr);
+
+    if (!jlsIsSafeModeEnabled)
+    {
+        safeType = jlsSafeTypeNone;
+    }
+
+    char safeStringFile[FILE_INFO_TARGET_LENGTH_MAX] = {0};
+
+    if (safeType & jlsSafeTypeName)
+    {
+        size_t before = 0;
+        size_t after  = 0;
+
+        before = strlen(fileInfoStringFilePtr) + 1;
+
+        after = jlsMakeStringSafe(fileInfoStringFilePtr, &safeStringFile[0], FILE_INFO_TARGET_LENGTH_MAX, isOkPtr);
+        if (!*isOkPtr)
+        {
+            *isOkPtr = false;
+            return;
+        }
+
+        if (before == after)
+        {
+            printf(" ");
+        }
+
+        fileInfoStringFilePtr = &safeStringFile[0];
+    }
+    printf("%s", fileInfoStringFilePtr);
+
+    char safeStringTarget[FILE_INFO_TARGET_LENGTH_MAX] = {0};
 
     if (fileInfoStringTargetPtr)
     {
+        if (safeType & jlsSafeTypeTarget)
+        {
+            jlsMakeStringSafe(fileInfoStringTargetPtr, &safeStringTarget[0], FILE_INFO_TARGET_LENGTH_MAX, isOkPtr);
+            if (!*isOkPtr)
+            {
+                *isOkPtr = false;
+                return;
+            }
+
+            fileInfoStringTargetPtr = &safeStringTarget[0];
+        }
         printf(" -> %s", fileInfoStringTargetPtr);
     }
 
     printf("\n");
+}
+
+jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
+{
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
+    *isOkPtr = true;
+
+    struct dirent *directoryEntity   = {0};
+    size_t         currentFileNumber = 0;
+
+    // Объявление переменных, используемых в cleanup
+    DIR                 *directory = 0;
+    jlsCommonInfoStruct  answer    = {0};
+    fileInfoStruct       fileInfo  = {0};
+
+    if (!dirPtr)
+    {
+        *isOkPtr = false;
+        goto cleanup;
+    }
+
+    answer.files.count = jlsCountFilesInDirectory(dirPtr, isOkPtr);
+    if (!answer.files.count || !*isOkPtr)
+    {
+        goto cleanup;
+    }
+
+    answer.files.list = calloc(answer.files.count, sizeof(char *));
+    if (!answer.files.list)
+    {
+        *isOkPtr = false;
+        goto cleanup;
+    }
+
+    directory = opendir(dirPtr);
+    if (!directory)
+    {
+        *isOkPtr = false;
+        goto cleanup;
+    }
+
+    char   fullPath[PATH_MAX] = {0};
+    size_t pathLength         = 0;
+
+    pathLength = jlsPathSet(dirPtr, &fullPath[0], PATH_MAX, isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
+
+    while ((directoryEntity = readdir(directory)) != NULL) 
+    {
+        /*
+            Общее. Начало цикла
+        */
+
+        jlsPathAppend(directoryEntity->d_name, &fullPath[0], pathLength, PATH_MAX, isOkPtr);
+        if (!*isOkPtr)
+        {
+            goto cleanup;
+        }
+
+        /*
+            Расчет answer.files
+        */
+
+        if (strcmp(directoryEntity->d_name, ".")  == 0 ||
+            strcmp(directoryEntity->d_name, "..") == 0)
+        {
+            continue;
+        }
+
+        answer.files.list[currentFileNumber] = malloc(strlen(directoryEntity->d_name) + 1);
+        if (!answer.files.list[currentFileNumber])
+        {
+            *isOkPtr = false;
+            goto cleanup;
+        }
+
+        strcpy(answer.files.list[currentFileNumber], directoryEntity->d_name);
+
+        /*
+            Общее. Получение информации о файле
+        */
+
+        static char fileInfoString[JLS_FILE_INFO_MAX_LENGTH] = {0};
+
+        if (fileInfo.fileNamePtr)
+        {
+            free(fileInfo.fileNamePtr);
+            fileInfo.fileNamePtr = 0;
+        }
+        if (fileInfo.targetPtr)
+        {
+            free(fileInfo.targetPtr);
+            fileInfo.targetPtr = 0;
+        }
+
+        fileInfoGet(&fullPath[0], &fileInfo, isOkPtr);
+        if (!*isOkPtr)
+        {
+            goto cleanup;
+        }
+
+        fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH, isOkPtr);
+        if (!*isOkPtr)
+        {
+            goto cleanup;
+        }
+
+        /*
+            Рассчет answer.alignment
+        */
+
+        static const char  delimer[] = {FILE_INFO_TO_STRING_DELIMER, '\0'};
+        static       char *field     = 0;
+
+        // Пропускаем тип файла
+        field = strtok(&fileInfoString[0], delimer);
+        // Пропускаем права доступа файла
+        field = strtok(NULL, delimer);
+
+        field = strtok(NULL, delimer);
+        if (answer.alignment.linksCount < strlen(field))
+        {
+            answer.alignment.linksCount = strlen(field);
+        }
+
+        field = strtok(NULL, delimer);
+        if (answer.alignment.owner < strlen(field))
+        {
+            answer.alignment.owner = strlen(field);
+        }
+
+        field = strtok(NULL, delimer);
+        if (answer.alignment.group < strlen(field))
+        {
+            answer.alignment.group = strlen(field);
+        }
+
+        field = strtok(NULL, delimer);
+        if (answer.alignment.size < strlen(field))
+        {
+            answer.alignment.size = strlen(field);
+        }
+
+        /*
+            Рассчет answer.safeType
+        */
+
+        if (jlsIsSafeModeEnabled)
+        {
+            static bool isFileUnsafe   = false;
+            static bool isTargetUnsafe = false;
+
+            if (!isFileUnsafe)
+            {
+                isFileUnsafe = jlsCheckIsUnsafe(fileInfo.fileNamePtr, isOkPtr);
+                if (!*isOkPtr)
+                {
+                    goto cleanup;
+                }
+            }
+
+            if (!isTargetUnsafe && fileInfo.type == fileInfoTypeLink)
+            {
+                isTargetUnsafe = jlsCheckIsUnsafe(fileInfo.targetPtr, isOkPtr);
+                if (!*isOkPtr)
+                {
+                    goto cleanup;
+                }
+            }
+        
+            if (currentFileNumber + 1 == answer.files.count)
+            {
+                if (isFileUnsafe)
+                {
+                    answer.safeType += jlsSafeTypeName;
+                }
+                if (isTargetUnsafe)
+                {
+                    answer.safeType += jlsSafeTypeTarget;
+                }
+            }
+        }
+
+        /*
+            Рассчет answer.blocks
+        */
+
+        answer.total += fileInfoGet512BytesBlocks(isOkPtr);
+        if (!*isOkPtr)
+        {
+            goto cleanup;
+        }
+    
+        if (currentFileNumber + 1 == answer.files.count)
+        {
+            answer.total /= 2;
+        }
+
+        /*
+            Общее. Завершение цикла
+        */
+
+        ++currentFileNumber;
+        if (currentFileNumber == answer.files.count)
+        {
+            // Если количество файлов в директории изменилось за время выполнения функции, обрабатываем не все файлы
+            break;
+        }
+    }
+
+cleanup:
+    if (directory)
+    {
+        closedir(directory);
+    }
+
+    if (fileInfo.fileNamePtr)
+    {
+        free(fileInfo.fileNamePtr);
+        fileInfo.fileNamePtr = 0;
+    }
+    if (fileInfo.targetPtr)
+    {
+        free(fileInfo.targetPtr);
+        fileInfo.targetPtr = 0;
+    }
+
+    if (!*isOkPtr)
+    {
+        if (answer.files.list)
+        {
+            for (int i = 0; i < answer.files.count; ++i)
+            {
+                if (answer.files.list[i])
+                {
+                    free(answer.files.list[i]);
+                    answer.files.list[i] = 0;
+                }
+            }
+        }
+        if (answer.files.list)
+        {
+            free(answer.files.list);
+            answer.files.list = 0;
+        }
+    }
+    
+    if (*isOkPtr)
+    {
+        return answer;
+    }
+    else
+    {
+        return (jlsCommonInfoStruct){0};
+    }
 }
 
 jlsFilesListStruct jlsGetFilesList(const char *dirPtr, bool *isOkPtr)
@@ -296,6 +633,8 @@ jlsFilesListStruct jlsGetFilesList(const char *dirPtr, bool *isOkPtr)
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
     
     size_t         filesCount      = 0;
     struct dirent *directoryEntity = {0};
@@ -307,7 +646,6 @@ jlsFilesListStruct jlsGetFilesList(const char *dirPtr, bool *isOkPtr)
     filesCount = jlsCountFilesInDirectory(dirPtr, isOkPtr);
     if (!filesCount || !*isOkPtr)
     {
-        return answer;
         goto cleanup;
     }
 
@@ -386,7 +724,7 @@ cleanup:
     }
 }
 
-void jlsSortFilesList(const jlsFilesListStruct *filesListPtr, jlsSortEnum sort, bool *isOkPtr)
+void jlsSortFilesList(jlsFilesListStruct *filesListPtr, jlsSortEnum sort, bool *isOkPtr)
 {
     bool isOk = true;
 
@@ -394,6 +732,8 @@ void jlsSortFilesList(const jlsFilesListStruct *filesListPtr, jlsSortEnum sort, 
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
     
     if (!filesListPtr || !filesListPtr->list || filesListPtr->count < 2)
     {
@@ -429,6 +769,8 @@ size_t jlsCountFilesInDirectory(const char *dirPtr, bool *isOkPtr)
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
     
     size_t         answer          = 0;
     DIR           *directory       = 0;
@@ -467,6 +809,8 @@ jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesList
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
 
     jlsAlignmentStruct answer = {0};
     
@@ -565,7 +909,7 @@ cleanup:
         free(fileInfo.targetPtr);
         fileInfo.targetPtr = 0;
     }
-    if (isOk)
+    if (*isOkPtr)
     {
         return answer;
     }
@@ -575,7 +919,7 @@ cleanup:
     }
 }
 
-uint32_t jlsCalculate512ByteBlocks(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr)
+jlsSafeTypesEnum jlsCalculateSafeType(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr)
 {
     bool isOk = true;
 
@@ -584,10 +928,110 @@ uint32_t jlsCalculate512ByteBlocks(const char *pathPtr, const jlsFilesListStruct
         isOkPtr = &isOk;
     }
 
-    uint32_t answer = {0};
-    
-    // Объявление переменных, используемых в cleanup
-    fileInfoStruct fileInfo = {0};
+    *isOkPtr = true;
+
+    jlsSafeTypesEnum answer = jlsSafeTypeNone;
+
+    if (!pathPtr || !filesList)
+    {
+        *isOkPtr = false;
+        goto cleanup;
+    }
+
+    char   fullPath[PATH_MAX] = {0};
+    size_t pathLength         = 0;
+
+    pathLength = jlsPathSet(pathPtr, &fullPath[0], PATH_MAX, isOkPtr);
+    if (!*isOkPtr)
+    {
+        goto cleanup;
+    }
+
+    bool isFileUnsafe   = false;
+    bool isTargetUnsafe = false;
+
+    for (int i = 0; i < filesList->count; ++i)
+    {
+        jlsPathAppend(filesList->list[i], &fullPath[0], pathLength, PATH_MAX, isOkPtr);
+        if (!*isOkPtr)
+        {
+            goto cleanup;
+        }
+
+        if (!fileInfoSetActiveFile(&fullPath[0]))
+        {
+            goto cleanup;
+        }
+
+        fileInfoTypesEnum type = fileInfoTypeUnknown;
+
+        type = fileInfoGetType(isOkPtr);
+        if (!*isOkPtr)
+        {
+            goto cleanup;
+        }
+
+        if (!isFileUnsafe)
+        {
+            isFileUnsafe = jlsCheckIsUnsafe(filesList->list[i], isOkPtr);
+            if (!*isOkPtr)
+            {
+                goto cleanup;
+            }
+        }
+
+        if (!isTargetUnsafe && type == fileInfoTypeLink)
+        {
+            static char targetString[JLS_FILE_INFO_MAX_LENGTH] = {0};
+
+            fileInfoGetLinkTarget(&targetString[0], JLS_FILE_INFO_MAX_LENGTH, isOkPtr);
+            if (!*isOkPtr)
+            {
+                goto cleanup;
+            }
+
+            isTargetUnsafe = jlsCheckIsUnsafe(&targetString[0], isOkPtr);
+            if (!*isOkPtr)
+            {
+                goto cleanup;
+            }
+        }
+    }
+
+    if (isFileUnsafe)
+    {
+        answer += jlsSafeTypeName;
+    }
+    if (isTargetUnsafe)
+    {
+        answer += jlsSafeTypeTarget;
+    }
+
+cleanup:
+    fileInfoClearActiveFile();
+
+    if (*isOkPtr)
+    {
+        return answer;
+    }
+    else
+    {
+        return jlsSafeTypeNone;
+    }
+}
+
+uint64_t jlsCalculate1024ByteBlocks(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr)
+{
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
+    *isOkPtr = true;
+
+    uint64_t answer = {0};
 
     if (!pathPtr || !filesList)
     {
@@ -607,17 +1051,6 @@ uint32_t jlsCalculate512ByteBlocks(const char *pathPtr, const jlsFilesListStruct
     for (int i = 0; i < filesList->count; ++i)
     {
         static char fileInfoString[JLS_FILE_INFO_MAX_LENGTH] = {0};
-
-        if (fileInfo.fileNamePtr)
-        {
-            free(fileInfo.fileNamePtr);
-            fileInfo.fileNamePtr = 0;
-        }
-        if (fileInfo.targetPtr)
-        {
-            free(fileInfo.targetPtr);
-            fileInfo.targetPtr = 0;
-        }
     
         jlsPathAppend(filesList->list[i], &fullPath[0], pathLength, PATH_MAX, isOkPtr);
         if (!*isOkPtr)
@@ -630,7 +1063,7 @@ uint32_t jlsCalculate512ByteBlocks(const char *pathPtr, const jlsFilesListStruct
             goto cleanup;
         }
 
-        answer += fileInfoGet1204BytesBlocks(isOkPtr);
+        answer += fileInfoGet512BytesBlocks(isOkPtr);
         if (!*isOkPtr)
         {
             goto cleanup;
@@ -638,21 +1071,10 @@ uint32_t jlsCalculate512ByteBlocks(const char *pathPtr, const jlsFilesListStruct
     }
 
 cleanup:
-    if (fileInfo.fileNamePtr)
-    {
-        free(fileInfo.fileNamePtr);
-        fileInfo.fileNamePtr = 0;
-    }
-
-    if (fileInfo.targetPtr)
-    {
-        free(fileInfo.targetPtr);
-        fileInfo.targetPtr = 0;
-    }
 
     fileInfoClearActiveFile();
 
-    if (isOk)
+    if (*isOkPtr)
     {
         answer /= 2;
         return answer;
@@ -661,6 +1083,98 @@ cleanup:
     {
         return 0;
     }
+}
+
+size_t jlsMakeStringSafe(const char *stringPtr, char *safePtr, size_t safePtrLength, bool *isOkPtr)
+{
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
+    *isOkPtr = true;
+
+    if (!stringPtr || !safePtr || strlen(stringPtr) + 1 > safePtrLength)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
+
+    bool isUnsafe = true;
+
+    isUnsafe = jlsCheckIsUnsafe(stringPtr, isOkPtr);
+    if (!*isOkPtr)
+    {
+        return 0;
+    }
+    if (!isUnsafe)
+    {
+        strcpy(safePtr, stringPtr);
+        return strlen(safePtr) + 1;
+    }
+
+    // \0 и 2 экранирующих символа 
+    if (strlen(stringPtr) + 3 > safePtrLength)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
+
+    memset(safePtr, 0, safePtrLength);
+
+    size_t answer = 0;
+
+    if (!strchr(stringPtr, '\''))
+    {
+        safePtr[answer++] = '\'';
+        memcpy(&safePtr[answer], stringPtr, strlen(stringPtr));
+        answer += strlen(stringPtr);
+        safePtr[answer++] = '\'';
+
+        return answer;
+    }
+
+    if (!strchr(stringPtr, '"') && 
+        !strchr(stringPtr, '$') && 
+        !strchr(stringPtr, '`') && 
+        !strchr(stringPtr, '\\'))
+    {
+        safePtr[answer++] = '"';
+        memcpy(&safePtr[answer], stringPtr, strlen(stringPtr));
+        answer += strlen(stringPtr);
+        safePtr[answer++] = '"';
+
+        return answer;
+    }
+
+    safePtr[answer++] = '\'';
+    for (int i = 0; i < strlen(stringPtr); ++i)
+    {
+        static const char safeQuote[] = "\'\\\'\'";
+
+        if (stringPtr[i] != '\'')
+        {
+            safePtr[answer++] = stringPtr[i];
+            continue;
+        }
+
+        // \0 и закрывающий экранирующий символ
+        if (answer + strlen(safeQuote) >= safePtrLength - 2)
+        {
+            *isOkPtr = false;
+            break;
+        }
+
+        memcpy(&safePtr[answer], &safeQuote[0], strlen(safeQuote));
+
+        answer += strlen(safeQuote);
+    }
+    safePtr[answer++] = '\'';
+    safePtr[answer++] = '\0';
+
+    return answer;
 }
 
 /*
@@ -675,6 +1189,8 @@ static size_t jlsPathSet(const char *pathPtr, char *bufferPtr, size_t bufferSize
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
 
     size_t answer = 0;
 
@@ -700,6 +1216,8 @@ static size_t jlsPathAppend(const char *filePtr, char *bufferPtr, size_t bufferL
         isOkPtr = &isOk;
     }
 
+    *isOkPtr = true;
+
     size_t answer = 0;
 
     if (!filePtr || !bufferPtr || bufferSize < bufferLength)
@@ -723,4 +1241,66 @@ static int jlsFilesListCompareAscend(const void *a, const void *b)
 static int jlsFilesListCompareDescend(const void *a, const void *b)
 {
     return jlsFilesListCompareAscend(b, a);
+}
+
+static bool jlsCheckIsUnsafe(const char *stringPtr, bool *isOkPtr)
+{
+    bool isOk = true;
+
+    if (!isOkPtr)
+    {
+        isOkPtr = &isOk;
+    }
+
+    *isOkPtr = true;
+
+    if (!stringPtr)
+    {
+        *isOkPtr = false;
+        return false;
+    }
+    
+    size_t stringLength = strlen(stringPtr);
+    
+    while (stringLength > 0)
+    {
+        bool      isPrintable    = true;
+        wchar_t   wideChar       = L'\0';
+        size_t    wideCharLength = 0;
+        mbstate_t state          = {0};
+        
+        wideCharLength = mbrtowc(&wideChar, stringPtr, stringLength, &state);
+
+        if (wideCharLength == (size_t) - 1 || wideCharLength == (size_t) - 2)
+        {
+            isPrintable    = false;
+            wideCharLength = 1;
+        }
+        else
+        {
+            isPrintable = iswprint(wideChar);
+        }
+
+        if (!isPrintable)
+        {
+            return true;
+        }
+
+        switch (wideChar)
+        {
+            case L' ':  case L'\t': case L'\n': case L'\r': case L'\v':
+            case L'\f': case L'\'': case L'"':  case L'\\': case L'|':
+            case L'&':  case L';':  case L'<':  case L'>':  case L'(':
+            case L')':  case L'$':  case L'!':  case L'*':  case L'?':
+            case L'[':  case L']':  case L'{':  case L'}':  case L'`':
+            {
+                return true;
+            }
+        }
+
+        stringPtr    += wideCharLength;
+        stringLength -= wideCharLength;
+    }
+
+    return false;
 }

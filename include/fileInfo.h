@@ -91,7 +91,7 @@ typedef struct fileInfoStruct
     char                *targetPtr;      ///< Указатель на строку с путем к цели ссылки
     size_t               targetLength;   ///< Длина targetPtr
     bool                 isTargetExists; ///< Флаг существования цели ссылки
-    int64_t              blocks;         ///< Количество занимаемых файлом 1024 байтовых блоков
+    int64_t              blocks;         ///< Количество занимаемых файлом 512 байтовых блоков
     __uint64_t           deviceNumber;   ///< Номер устройства
 } fileInfoStruct;
 
@@ -197,10 +197,10 @@ time_t fileInfoGetTimeEdit(bool *isOkPtr);
 size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения количества занимаемых блоков
-/// @details    Данная функция выполняет получение количества занимаемых активным файлом 1024 байтовых блоков
+/// @details    Данная функция выполняет получение количества занимаемых активным файлом 512 байтовых блоков
 /// @param[out] isOkPtr Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return     Возвращает количество занимаемых активным файлом блоков
-uint32_t fileInfoGet1204BytesBlocks(bool *isOkPtr);
+uint32_t fileInfoGet512BytesBlocks(bool *isOkPtr);
 
 /*
     Прототипы функций получения строкового представления информации о файле
