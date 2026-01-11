@@ -9,7 +9,7 @@
 ///                 6) jlsCountFilesInDirectory() для подсчета количества файлов в директории<br>
 ///                 7) jlsCalculateAlignment() для расчета максимальных размеров полей информации о файле<br>
 /// @note       Для настройки вывода, модулем используются следующие переменные:<br>
-///                 1) TODO<br>
+///                 1) jlsIsSafeModeEnabled <br>
 /// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #ifndef _JLS_H_
@@ -170,10 +170,13 @@ jlsSafeTypesEnum jlsCalculateSafeType(const char *pathPtr, const jlsFilesListStr
 uint64_t jlsCalculate1024ByteBlocks(const char *pathPtr, const jlsFilesListStruct *filesList, bool *isOkPtr);
 
 /// @brief      Функция преобразования строки в безопасный вариант
-/// @details    Данная функция выполняет экранирование строки stringPtr в соответствии
-///                 с её запрещенными символами и записывает результат в safePtr
+/// @details    Данная функция выполняет экранирование строки stringPtr по правилам: <br>
+///                 -) Если небезопасных символов нет, ничего не делать <br>
+///                 -) Если есть одинарные кавычки, экранировать stringPtr двойными кавычками <br>
+///                 -) Если одинарных кавычек нет, экранировать stringPtr одинарными кавычками <br>
+///                 Новая строка записывается в safePtr
 /// @param[in]  stringPtr     Указатель на строку
-/// @param[out] safePtr       Указатель на строку в безопасном варианте
+/// @param[out] safePtr       Указатель на строку в безопасном варианте, куда будет записан результат с \0
 /// @param[in]  safePtrLength Длина safePtrLength
 /// @param[out] isOkPtr       Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return    Возвращает количество записанных в safePtr данных
@@ -184,7 +187,7 @@ size_t jlsMakeStringSafe(const char *stringPtr, char *safePtr, size_t safePtrLen
 */
 
 /// @brief      Флаг вывода информации в безопасном режиме
-/// @details    Если установлен, названия файлов с запрещенными символами будут выведены в одиночных кавычках
+/// @details    Если установлен, названия файлов с запрещенными символами будут выведены в экранирующих символах
 /// @note       По умолчанию выключен
 extern bool jlsIsSafeModeEnabled;
 

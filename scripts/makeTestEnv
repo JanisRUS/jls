@@ -28,6 +28,7 @@ readonly COMMON_TESTS_LIST=(SymlinksWithSpaces
                             DifferentTypes
                             EditTimeFuture
                             SymlinksBroken
+                            UnsafeSymbols
                             BigFilesList
                             EditTimePast
                             WithSpaces
@@ -587,6 +588,46 @@ function makeTestDifferentUIDGID()
         fi
     done
 
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Небезопасные символы"
+# @details  Данная функция выполняет создание директории с названием UnsafeSymbols
+#               и создает в ней файлы небезопасными символами
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestUnsafeSymbols()
+{
+    local TEST_NAME="UnsafeSymbols"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILES_LIST=("File Spaces"
+                      "File Q'uote"
+                      "File Double \"Q\"oute"
+                      "File M'ix\"ed\""
+                      "File_\$PATH"
+                      "File\\tTab"
+                      "Русские символы"
+                      "Предыдущий тест-кейс зависит от локали")
+    local FILE=""
+    for FILE in "${FILES_LIST[@]}"
+    do
+        if ! echo "File $FILE" > "$COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+    done
+    
     echo "Done"
 
     return 0

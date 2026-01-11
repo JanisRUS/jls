@@ -56,7 +56,7 @@ if (DOXYGEN)
     )
 endif()
 
-# Настройка правила тестирования
+# Настройка правил тестирования
 add_custom_target(tests
     COMMAND bash -c "${CMAKE_SOURCE_DIR}/scripts/makeTests ${CMAKE_BINARY_DIR}/${PROJECT_NAME}"
 )

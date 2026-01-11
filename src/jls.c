@@ -9,6 +9,9 @@
 #include <dirent.h>
 #include <linux/limits.h>
 #include <inttypes.h>
+#include <stddef.h>
+#include <wchar.h>
+#include <wctype.h>
 
 /*
     Прототипы внутренних функций
@@ -47,8 +50,6 @@ static int jlsFilesListCompareDescend(const void *a, const void *b);
 
 /// @brief      Функция проверки строки на небезопасные символы
 /// @details    Выполняет посимвольную проверку stringPtr на наличие небезопасных символов
-/// @note       Список небезопасных символов: <br>
-///                 TODO
 /// @param[in]  stringPtr Указатель на строку
 /// @param[out] isOkPtr   Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @return     Возвращает true если в строке есть небезопасные символы.
@@ -109,8 +110,8 @@ int jls(const char *filePtr)
         fileInfoStringLength = fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH, &isOk);
         if (isOk)
         {
-            bool             isFileUnsafe   = true;
-            bool             isTargetUnsafe = true;
+            bool             isFileUnsafe   = false;
+            bool             isTargetUnsafe = false;
             jlsSafeTypesEnum safeType       = jlsSafeTypeNone;
 
             isFileUnsafe = jlsCheckIsUnsafe(fileInfo.fileNamePtr, &isOk);
@@ -260,6 +261,8 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
     
     char buffer[JLS_FILE_INFO_MAX_LENGTH] = {0};
 
@@ -316,15 +319,24 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
 
     if (safeType & jlsSafeTypeName)
     {
-        jlsMakeStringSafe(fileInfoStringFilePtr, &safeStringFile[0], FILE_INFO_TARGET_LENGTH_MAX, isOkPtr);
+        size_t before = 0;
+        size_t after  = 0;
+
+        before = strlen(fileInfoStringFilePtr) + 1;
+
+        after = jlsMakeStringSafe(fileInfoStringFilePtr, &safeStringFile[0], FILE_INFO_TARGET_LENGTH_MAX, isOkPtr);
         if (!*isOkPtr)
         {
             *isOkPtr = false;
             return;
         }
 
+        if (before == after)
+        {
+            printf(" ");
+        }
+
         fileInfoStringFilePtr = &safeStringFile[0];
-        printf(" ");
     }
     printf("%s", fileInfoStringFilePtr);
 
@@ -357,6 +369,8 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
 
     struct dirent *directoryEntity   = {0};
     size_t         currentFileNumber = 0;
@@ -501,36 +515,39 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
             Рассчет answer.safeType
         */
 
-        static bool isFileUnsafe   = true;
-        static bool isTargetUnsafe = true;
+        if (jlsIsSafeModeEnabled)
+        {
+            static bool isFileUnsafe   = false;
+            static bool isTargetUnsafe = false;
 
-        if (!isFileUnsafe)
-        {
-            isFileUnsafe = jlsCheckIsUnsafe(fileInfo.fileNamePtr, isOkPtr);
-            if (!*isOkPtr)
+            if (!isFileUnsafe)
             {
-                goto cleanup;
+                isFileUnsafe = jlsCheckIsUnsafe(fileInfo.fileNamePtr, isOkPtr);
+                if (!*isOkPtr)
+                {
+                    goto cleanup;
+                }
             }
-        }
 
-        if (!isTargetUnsafe && fileInfo.type == fileInfoTypeLink)
-        {
-            isTargetUnsafe = jlsCheckIsUnsafe(fileInfo.targetPtr, isOkPtr);
-            if (!*isOkPtr)
+            if (!isTargetUnsafe && fileInfo.type == fileInfoTypeLink)
             {
-                goto cleanup;
+                isTargetUnsafe = jlsCheckIsUnsafe(fileInfo.targetPtr, isOkPtr);
+                if (!*isOkPtr)
+                {
+                    goto cleanup;
+                }
             }
-        }
-    
-        if (currentFileNumber + 1 == answer.files.count)
-        {
-            if (isFileUnsafe)
+        
+            if (currentFileNumber + 1 == answer.files.count)
             {
-                answer.safeType += jlsSafeTypeName;
-            }
-            if (isTargetUnsafe)
-            {
-                answer.safeType += jlsSafeTypeTarget;
+                if (isFileUnsafe)
+                {
+                    answer.safeType += jlsSafeTypeName;
+                }
+                if (isTargetUnsafe)
+                {
+                    answer.safeType += jlsSafeTypeTarget;
+                }
             }
         }
 
@@ -616,6 +633,8 @@ jlsFilesListStruct jlsGetFilesList(const char *dirPtr, bool *isOkPtr)
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
     
     size_t         filesCount      = 0;
     struct dirent *directoryEntity = {0};
@@ -713,6 +732,8 @@ void jlsSortFilesList(jlsFilesListStruct *filesListPtr, jlsSortEnum sort, bool *
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
     
     if (!filesListPtr || !filesListPtr->list || filesListPtr->count < 2)
     {
@@ -748,6 +769,8 @@ size_t jlsCountFilesInDirectory(const char *dirPtr, bool *isOkPtr)
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
     
     size_t         answer          = 0;
     DIR           *directory       = 0;
@@ -786,6 +809,8 @@ jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesList
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
 
     jlsAlignmentStruct answer = {0};
     
@@ -903,6 +928,8 @@ jlsSafeTypesEnum jlsCalculateSafeType(const char *pathPtr, const jlsFilesListStr
         isOkPtr = &isOk;
     }
 
+    *isOkPtr = true;
+
     jlsSafeTypesEnum answer = jlsSafeTypeNone;
 
     if (!pathPtr || !filesList)
@@ -920,8 +947,8 @@ jlsSafeTypesEnum jlsCalculateSafeType(const char *pathPtr, const jlsFilesListStr
         goto cleanup;
     }
 
-    bool isFileUnsafe   = true;
-    bool isTargetUnsafe = true;
+    bool isFileUnsafe   = false;
+    bool isTargetUnsafe = false;
 
     for (int i = 0; i < filesList->count; ++i)
     {
@@ -1002,6 +1029,8 @@ uint64_t jlsCalculate1024ByteBlocks(const char *pathPtr, const jlsFilesListStruc
         isOkPtr = &isOk;
     }
 
+    *isOkPtr = true;
+
     uint64_t answer = {0};
 
     if (!pathPtr || !filesList)
@@ -1065,17 +1094,85 @@ size_t jlsMakeStringSafe(const char *stringPtr, char *safePtr, size_t safePtrLen
         isOkPtr = &isOk;
     }
 
+    *isOkPtr = true;
+
     if (!stringPtr || !safePtr || strlen(stringPtr) + 1 > safePtrLength)
     {
         *isOkPtr = false;
         return 0;
     }
 
+    bool isUnsafe = true;
+
+    isUnsafe = jlsCheckIsUnsafe(stringPtr, isOkPtr);
+    if (!*isOkPtr)
+    {
+        return 0;
+    }
+    if (!isUnsafe)
+    {
+        strcpy(safePtr, stringPtr);
+        return strlen(safePtr) + 1;
+    }
+
+    // \0 и 2 экранирующих символа 
+    if (strlen(stringPtr) + 3 > safePtrLength)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
+
+    memset(safePtr, 0, safePtrLength);
+
     size_t answer = 0;
 
-    // TODO Реализовать обезопашивание строки 
-    strcpy(safePtr, stringPtr);
-    answer = strlen(safePtr);
+    if (!strchr(stringPtr, '\''))
+    {
+        safePtr[answer++] = '\'';
+        memcpy(&safePtr[answer], stringPtr, strlen(stringPtr));
+        answer += strlen(stringPtr);
+        safePtr[answer++] = '\'';
+
+        return answer;
+    }
+
+    if (!strchr(stringPtr, '"') && 
+        !strchr(stringPtr, '$') && 
+        !strchr(stringPtr, '`') && 
+        !strchr(stringPtr, '\\'))
+    {
+        safePtr[answer++] = '"';
+        memcpy(&safePtr[answer], stringPtr, strlen(stringPtr));
+        answer += strlen(stringPtr);
+        safePtr[answer++] = '"';
+
+        return answer;
+    }
+
+    safePtr[answer++] = '\'';
+    for (int i = 0; i < strlen(stringPtr); ++i)
+    {
+        static const char safeQuote[] = "\'\\\'\'";
+
+        if (stringPtr[i] != '\'')
+        {
+            safePtr[answer++] = stringPtr[i];
+            continue;
+        }
+
+        // \0 и закрывающий экранирующий символ
+        if (answer + strlen(safeQuote) >= safePtrLength - 2)
+        {
+            *isOkPtr = false;
+            break;
+        }
+
+        memcpy(&safePtr[answer], &safeQuote[0], strlen(safeQuote));
+
+        answer += strlen(safeQuote);
+    }
+    safePtr[answer++] = '\'';
+    safePtr[answer++] = '\0';
 
     return answer;
 }
@@ -1092,6 +1189,8 @@ static size_t jlsPathSet(const char *pathPtr, char *bufferPtr, size_t bufferSize
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
 
     size_t answer = 0;
 
@@ -1116,6 +1215,8 @@ static size_t jlsPathAppend(const char *filePtr, char *bufferPtr, size_t bufferL
     {
         isOkPtr = &isOk;
     }
+
+    *isOkPtr = true;
 
     size_t answer = 0;
 
@@ -1151,15 +1252,55 @@ static bool jlsCheckIsUnsafe(const char *stringPtr, bool *isOkPtr)
         isOkPtr = &isOk;
     }
 
-    bool answer = false;
+    *isOkPtr = true;
 
     if (!stringPtr)
     {
         *isOkPtr = false;
-        return answer;
+        return false;
     }
     
-    // TODO Проверка строки на безопасность
+    size_t stringLength = strlen(stringPtr);
+    
+    while (stringLength > 0)
+    {
+        bool      isPrintable    = true;
+        wchar_t   wideChar       = L'\0';
+        size_t    wideCharLength = 0;
+        mbstate_t state          = {0};
+        
+        wideCharLength = mbrtowc(&wideChar, stringPtr, stringLength, &state);
 
-    return answer;
+        if (wideCharLength == (size_t) - 1 || wideCharLength == (size_t) - 2)
+        {
+            isPrintable    = false;
+            wideCharLength = 1;
+        }
+        else
+        {
+            isPrintable = iswprint(wideChar);
+        }
+
+        if (!isPrintable)
+        {
+            return true;
+        }
+
+        switch (wideChar)
+        {
+            case L' ':  case L'\t': case L'\n': case L'\r': case L'\v':
+            case L'\f': case L'\'': case L'"':  case L'\\': case L'|':
+            case L'&':  case L';':  case L'<':  case L'>':  case L'(':
+            case L')':  case L'$':  case L'!':  case L'*':  case L'?':
+            case L'[':  case L']':  case L'{':  case L'}':  case L'`':
+            {
+                return true;
+            }
+        }
+
+        stringPtr    += wideCharLength;
+        stringLength -= wideCharLength;
+    }
+
+    return false;
 }
