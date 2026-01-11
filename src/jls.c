@@ -205,6 +205,8 @@ int jls(const char *filePtr)
             goto cleanup;
         }
 
+        // TODO Сделать получение данных о цели симлинка. Определить цвета файла и его цели. Передать цвета в jlsPrintFileInfo 
+
         jlsPrintFileInfo(&fileInfoString[0], &commonInfo.alignment, commonInfo.safeType, &isOk);
         if (!isOk)
         {

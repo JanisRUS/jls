@@ -44,7 +44,7 @@ typedef enum fileInfoTypesEnum
     fileInfoTypeLink,        ///< Символическая ссылка
     fileInfoTypeSock,        ///< Сокет
     fileInfoTypeCount        ///< Количество типов файлов
-} fileInfoTypesEnum;
+}fileInfoTypesEnum;
 
 /*
     Структуры
@@ -74,7 +74,7 @@ typedef struct fileInfoAccessStruct
     fileInfoAccessUnion owner; ///< Доступ владельца
     fileInfoAccessUnion group; ///< Доступ группы
     fileInfoAccessUnion other; ///< Доступ прочих
-} fileInfoAccessStruct;
+}fileInfoAccessStruct;
 
 /// @brief      Структура информации о файле
 typedef struct fileInfoStruct
@@ -93,7 +93,7 @@ typedef struct fileInfoStruct
     bool                 isTargetExists; ///< Флаг существования цели ссылки
     int64_t              blocks;         ///< Количество занимаемых файлом 512 байтовых блоков
     __uint64_t           deviceNumber;   ///< Номер устройства
-} fileInfoStruct;
+}fileInfoStruct;
 
 #pragma pack (pop)
 
