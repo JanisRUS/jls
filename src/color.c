@@ -1,12 +1,11 @@
 /// @file       color.c
 /// @brief      См. colors.h
-/// @author     Тузиков Г.А.
+/// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #include "color.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "fileInfo.h"
 
 /*
     Макроподстановки
@@ -164,7 +163,7 @@ const char *colorGetReset(void)
     return &reset[0];
 }
 
-size_t colorFileToESC(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t *stringLength, bool *isOkPtr)
+size_t colorFileToESC(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t stringLength, bool *isOkPtr)
 {
     bool isOk = true;
 
@@ -175,7 +174,7 @@ size_t colorFileToESC(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t
 
     *isOkPtr = true;
 
-    if (!fileInfoPtr || !stringPtr || stringLength < 1)
+    if (!fileInfoPtr || !stringPtr)
     {
         *isOkPtr = false;
         return 0;

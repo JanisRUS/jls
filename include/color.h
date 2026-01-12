@@ -9,6 +9,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include "fileInfo.h"
 
 /*
     Макроподстановки
@@ -61,8 +62,8 @@ const char *colorGetReset(void);
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr 
-size_t colorFileToESC(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t *stringLength, bool *isOkPtr);
+/// @return     Возвращает длинну stringPtr
+size_t colorFileToESC(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /*
     Переменные

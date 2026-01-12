@@ -193,7 +193,7 @@ time_t fileInfoGetTimeEdit(bool *isOkPtr);
 /// @param[out] stringPtr     Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength  Длина строки stringPtr
 /// @param[out] isOkPtr       Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения количества занимаемых блоков
@@ -215,7 +215,7 @@ uint32_t fileInfoGet512BytesBlocks(bool *isOkPtr);
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления типа файла
@@ -225,7 +225,7 @@ size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size
 /// @warning    Длина stringPtr должна быть хотя бы 2 байта. 1 на символ типа и 1 под \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringType(fileInfoTypesEnum type, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления структуры доступа к файлу
@@ -236,7 +236,7 @@ size_t fileInfoToStringType(fileInfoTypesEnum type, char *stringPtr, size_t stri
 /// @warning    Длина stringPtr должна быть хотя бы 10 байт. 9 на биты доступа и 1 под \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTypesEnum type, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового количества жестких ссылок на файл
@@ -245,7 +245,7 @@ size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTyp
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringLinksCount(uint32_t linksCount, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления Id владельца файла
@@ -254,7 +254,7 @@ size_t fileInfoToStringLinksCount(uint32_t linksCount, char *stringPtr, size_t s
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringOwnerId(uint32_t ownerId, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления Id группы файла
@@ -263,7 +263,7 @@ size_t fileInfoToStringOwnerId(uint32_t ownerId, char *stringPtr, size_t stringL
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового размера файла
@@ -272,7 +272,7 @@ size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringL
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового размера файла
@@ -281,7 +281,7 @@ size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength,
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringDeviceNumber(__uint64_t deviceNumber, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления времени последнего изменения файла
@@ -290,7 +290,7 @@ size_t fileInfoToStringDeviceNumber(__uint64_t deviceNumber, char *stringPtr, si
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringTimeEdit(time_t timeEdit, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 // _FILE_INFO_H_

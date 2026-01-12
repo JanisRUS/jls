@@ -1,6 +1,6 @@
 /// @file       fileInfo.c
 /// @brief      См. fileInfo.h
-/// @author     Тузиков Г.А.
+/// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #include "fileInfo.h"
 #include <errno.h>
@@ -524,88 +524,49 @@ size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size
     
     --stringLength;
 
-    length = fileInfoToStringType(fileInfoPtr->type, &stringPtr[answer], stringLength - answer, isOkPtr);
-    if (!*isOkPtr)
-    {
-        return 0;
-    }
-    answer += length;
-    stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
+    #define APPEND(FUNC)  if (stringLength - answer < 0)                    \
+                          {                                                 \
+                              *isOkPtr = false;                             \
+                              return 0;                                     \
+                          }                                                 \
+                          length = FUNC;                                    \
+                          if (!*isOkPtr)                                    \
+                          {                                                 \
+                              return 0;                                     \
+                          }                                                 \
+                          answer += length;                                 \
+                          stringPtr[answer++] = FILE_INFO_TO_STRING_DELIMER;
 
-    length = fileInfoToStringAccess(&fileInfoPtr->access, fileInfoPtr->type, &stringPtr[answer], stringLength - answer, isOkPtr);
-    if (!*isOkPtr)
-    {
-        return 0;
-    }
-    answer += length;
-    stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
+    APPEND(fileInfoToStringType(fileInfoPtr->type, &stringPtr[answer], stringLength - answer, isOkPtr));
 
-    length = fileInfoToStringLinksCount(fileInfoPtr->linksCount, &stringPtr[answer], stringLength - answer, isOkPtr);
-    if (!*isOkPtr)
-    {
-        return 0;
-    }
-    answer += length;
-    stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
+    APPEND(fileInfoToStringAccess(&fileInfoPtr->access, fileInfoPtr->type, &stringPtr[answer], stringLength - answer, isOkPtr));
 
-    length = fileInfoToStringOwnerId(fileInfoPtr->ownerId, &stringPtr[answer], stringLength - answer, isOkPtr);
-    if (!*isOkPtr)
-    {
-        return 0;
-    }
-    answer += length;
-    stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
+    APPEND(fileInfoToStringLinksCount(fileInfoPtr->linksCount, &stringPtr[answer], stringLength - answer, isOkPtr));
 
-    length = fileInfoToStringGroupId(fileInfoPtr->groupId, &stringPtr[answer], stringLength - answer, isOkPtr);
-    if (!*isOkPtr)
-    {
-        return 0;
-    }
-    answer += length;
-    stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
+    APPEND(fileInfoToStringOwnerId(fileInfoPtr->ownerId, &stringPtr[answer], stringLength - answer, isOkPtr));
 
+    APPEND(fileInfoToStringGroupId(fileInfoPtr->groupId, &stringPtr[answer], stringLength - answer, isOkPtr));
+    
     if (fileInfoPtr->type != fileInfoTypeBlock && fileInfoPtr->type != fileInfoTypeChar)
     {
-        length = fileInfoToStringSize(fileInfoPtr->size, &stringPtr[answer], stringLength - answer, isOkPtr);
-        if (!*isOkPtr)
-        {
-            return 0;
-        }
+        APPEND(fileInfoToStringSize(fileInfoPtr->size, &stringPtr[answer], stringLength - answer, isOkPtr));
     }
     else
     {
-        length = fileInfoToStringDeviceNumber(fileInfoPtr->deviceNumber, &stringPtr[answer], stringLength - answer, isOkPtr);
-        if (!*isOkPtr)
-        {
-            return 0;
-        }
+        APPEND(fileInfoToStringDeviceNumber(fileInfoPtr->deviceNumber, &stringPtr[answer], stringLength - answer, isOkPtr));
     }
-    answer += length;
-    stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
 
-    length = fileInfoToStringTimeEdit(fileInfoPtr->timeEdit, &stringPtr[answer], stringLength - answer, isOkPtr);
-    if (!*isOkPtr)
-    {
-        return 0;
-    }
-    answer += length;
-    stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
+    APPEND(fileInfoToStringTimeEdit(fileInfoPtr->timeEdit, &stringPtr[answer], stringLength - answer, isOkPtr));
 
-    length = snprintf(&stringPtr[answer], stringLength - answer, "%s", fileInfoPtr->fileNamePtr);
-    answer += length;
-    stringPtr[++answer]   = '\0';
-    stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
+    APPEND(snprintf(&stringPtr[answer], stringLength - answer, "%s", fileInfoPtr->fileNamePtr));
 
     if (fileInfoPtr->type == fileInfoTypeLink)
     {
-        length = snprintf(&stringPtr[answer], stringLength - answer, "%s", fileInfoPtr->targetPtr);
-        answer += length;
-        stringPtr[++answer]   = '\0';
-        stringPtr[answer - 1] = FILE_INFO_TO_STRING_DELIMER;
+        APPEND(snprintf(&stringPtr[answer], stringLength - answer, "%s", fileInfoPtr->targetPtr));
     }
 
-    // Перезаписываем последний \t на \0
-    stringPtr[answer - 1] = '\0';
+    // Перезаписываем последний разделитель на \0
+    stringPtr[--answer] = '\0';
 
     return answer;
 }
@@ -642,7 +603,7 @@ size_t fileInfoToStringType(fileInfoTypesEnum type, char *stringPtr, size_t stri
     }
 
     stringPtr[answer++] = typeToStringList[type];
-    stringPtr[answer++] = '\0';
+    stringPtr[answer]   = '\0';
 
     return answer;
 }
@@ -700,7 +661,7 @@ size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTyp
         stringPtr[answer++] = accessPtr->other.bits.execute ? 'x' : '-';
     }
 
-    stringPtr[answer++] = '\0';
+    stringPtr[answer] = '\0';
 
     return answer;
 }
@@ -716,18 +677,22 @@ size_t fileInfoToStringLinksCount(uint32_t linksCount, char *stringPtr, size_t s
 
     *isOkPtr = true;
     
-    size_t answer = 0;
+    int answer = 0;
     
-    if (!stringPtr || stringLength < 1)
+    if (!stringPtr)
     {
         *isOkPtr = false;
         return 0;
     }
     
     answer = snprintf(stringPtr, stringLength, "%" PRIu32, linksCount);
-    stringPtr[answer++] = '\0';
+    if (answer < 0)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
 
-    return answer;
+    return (size_t)answer;
 }
 
 
@@ -742,31 +707,33 @@ size_t fileInfoToStringOwnerId(uint32_t ownerId, char *stringPtr, size_t stringL
 
     *isOkPtr = true;
     
-    size_t answer = 0;
+    int answer = 0;
 
-    if (!stringPtr || stringLength < 1)
+    if (!stringPtr)
     {
         *isOkPtr = false;
         return 0;
     }
-
-    --stringLength;
 
     struct passwd *user = 0;
 
     user = getpwuid(ownerId);
     if (user)
     {
-        answer = stringLength > strlen(user->pw_name) ? strlen(user->pw_name) : stringLength;
-        memcpy(stringPtr, user->pw_name, answer);
+        answer = snprintf(stringPtr, stringLength, "%s", user->pw_name);
     }
     else
     {
         answer = snprintf(stringPtr, stringLength, "%" PRIu32, ownerId);
     }
-    stringPtr[answer++] = '\0';
 
-    return answer;
+    if (answer < 0)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
+
+    return (size_t)answer;
 }
 
 size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringLength, bool *isOkPtr)
@@ -780,31 +747,33 @@ size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringL
 
     *isOkPtr = true;
     
-    size_t answer = 0;
+    int answer = 0;
     
-    if (!stringPtr || stringLength < 1)
+    if (!stringPtr)
     {
         *isOkPtr = false;
         return 0;
     }
-    
-    --stringLength;
 
     struct group *group = 0;
 
     group = getgrgid(groupId);
     if (group)
     {
-        answer = stringLength > strlen(group->gr_name) ? strlen(group->gr_name) : stringLength;
-        memcpy(stringPtr, group->gr_name, answer);
+        answer = snprintf(stringPtr, stringLength, "%s", group->gr_name);
     }
     else
     {
         answer = snprintf(stringPtr, stringLength, "%" PRIu32, groupId);
     }
-    stringPtr[answer++] = '\0';
 
-    return answer;
+    if (answer < 0)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
+
+    return (size_t)answer;
 }
 
 size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength, bool *isOkPtr)
@@ -818,18 +787,22 @@ size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength,
 
     *isOkPtr = true;
     
-    size_t answer = 0;
+    int answer = 0;
     
-    if (!stringPtr || stringLength < 1)
+    if (!stringPtr)
     {
         *isOkPtr = false;
         return 0;
     }
     
     answer = snprintf(stringPtr, stringLength, "%" PRIu32, size);
-    stringPtr[answer++] = '\0';
+    if (answer < 0)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
 
-    return answer;
+    return (size_t)answer;
 }
 
 size_t fileInfoToStringDeviceNumber(__uint64_t deviceNumber, char *stringPtr, size_t stringLength, bool *isOkPtr)
@@ -843,18 +816,22 @@ size_t fileInfoToStringDeviceNumber(__uint64_t deviceNumber, char *stringPtr, si
 
     *isOkPtr = true;
     
-    size_t answer = 0;
+    int answer = 0;
     
-    if (!stringPtr || stringLength < 1)
+    if (!stringPtr)
     {
         *isOkPtr = false;
         return 0;
     }
     
     answer = snprintf(stringPtr, stringLength, "%d, %d", major(deviceNumber), minor(deviceNumber));
-    stringPtr[answer++] = '\0';
+    if (answer < 0)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
 
-    return answer;
+    return (size_t)answer;
 }
 
 size_t fileInfoToStringTimeEdit(time_t timeEdit, char *stringPtr, size_t stringLength, bool *isOkPtr)
@@ -868,15 +845,13 @@ size_t fileInfoToStringTimeEdit(time_t timeEdit, char *stringPtr, size_t stringL
 
     *isOkPtr = true;
     
-    size_t answer = 0;
+    int answer = 0;
     
-    if (!stringPtr || stringLength < 1)
+    if (!stringPtr)
     {
         *isOkPtr = false;
         return 0;
     }
-
-    --stringLength;
 
     time_t currentTime = time(NULL);
  
@@ -894,12 +869,18 @@ size_t fileInfoToStringTimeEdit(time_t timeEdit, char *stringPtr, size_t stringL
         answer = strftime(stringPtr, stringLength, "%b %e %H:%M", localtime(&timeEdit));
     }
 
+    if (answer < 0)
+    {
+        *isOkPtr = false;
+        return 0;
+    }
+
     // answer может быть равен 0, если время не поместилось в stringLength, хотя stringPtr будет заполнен данными
     if (!answer)
     {
         answer = stringLength;
+        stringPtr[answer - 1] = '\0';
     }
-    stringPtr[answer++] = '\0';
 
     return answer;
 }

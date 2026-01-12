@@ -1,6 +1,6 @@
 /// @file       jls.c
 /// @brief      См. jls.h
-/// @author     Тузиков Г.А.
+/// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #include "jls.h"
 #include "fileInfo.h"
