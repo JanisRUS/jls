@@ -58,7 +58,7 @@ bool fileInfoIsExists(const char *filePtr, bool *isOkPtr)
     return true;
 }
 
-void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool *isOkPtr)
+void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool isFollowLink, bool *isOkPtr)
 {
     bool isOk = true;
 
@@ -70,7 +70,9 @@ void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool *isOkPtr
     *isOkPtr = true;
 
     // Объявление переменных, используемых в cleanup
-    char *filePtrCopy = 0;
+    char *filePtrCopy1    = 0;
+    char *filePtrCopy2    = 0;
+    char *linkTargetPtr   = 0;
 
     if (!filePtr || !fileInfoPtr || !fileInfoSetActiveFile(filePtr))
     {
@@ -80,29 +82,28 @@ void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool *isOkPtr
     
     memset(fileInfoPtr, 0, sizeof(fileInfoStruct));
 
-    filePtrCopy = strdup(filePtr);
-    if (!filePtrCopy) 
+    filePtrCopy1 = strdup(filePtr);
+    if (!filePtrCopy1) 
+    {
+        *isOkPtr = false;
+        goto cleanup;
+    }
+
+    filePtrCopy2 = strdup(filePtr);
+    if (!filePtrCopy2) 
     {
         *isOkPtr = false;
         goto cleanup;
     }
 
     char *fileNamePtr = 0;
+    char *filePathPtr = 0;
 
-    fileNamePtr = basename(filePtrCopy);
-    fileInfoPtr->fileNamePtr = malloc(strlen(fileNamePtr) + 1);
+    fileNamePtr = basename(filePtrCopy1);
+    filePathPtr = dirname(filePtrCopy2);
+
+    fileInfoPtr->fileNamePtr = strdup(fileNamePtr);
     if (!fileInfoPtr->fileNamePtr)
-    {
-        *isOkPtr = false;
-        goto cleanup;
-    }
-
-    strcpy(fileInfoPtr->fileNamePtr, fileNamePtr);
-
-    fileInfoPtr->fileNameLength = strlen(fileInfoPtr->fileNamePtr) + 1;
-
-    fileInfoPtr->targetPtr = malloc(FILE_INFO_TARGET_LENGTH_MAX);
-    if (!fileInfoPtr->targetPtr)
     {
         *isOkPtr = false;
         goto cleanup;
@@ -164,25 +165,146 @@ void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool *isOkPtr
 
     if (fileInfoPtr->type == fileInfoTypeLink)
     {
-        fileInfoPtr->targetLength = fileInfoGetLinkTarget(fileInfoPtr->targetPtr, FILE_INFO_TARGET_LENGTH_MAX, isOkPtr);
+        linkTargetPtr = malloc(FILE_INFO_TARGET_LENGTH_MAX);
+        if (!linkTargetPtr)
+        {
+            *isOkPtr = false;
+            goto cleanup;
+        }
+
+        fileInfoGetLinkTarget(linkTargetPtr, FILE_INFO_TARGET_LENGTH_MAX, isOkPtr);
         if (!*isOkPtr)
         {
             goto cleanup;
         }
 
-        fileInfoPtr->isTargetExists = fileInfoIsExists(fileInfoPtr->targetPtr, isOkPtr);
+        if (linkTargetPtr[0] == '/')
+        {
+            fileInfoPtr->targetInfo.filePathPtr = strdup(linkTargetPtr);
+            if (!fileInfoPtr->targetInfo.filePathPtr)
+            {
+                *isOkPtr = false;
+                goto cleanup;
+            }
+        }
+        else
+        {
+            size_t filePathLength = 0;
+
+            // \0 и /
+            filePathLength = strlen(filePathPtr) + strlen(linkTargetPtr) + 2;
+    
+            fileInfoPtr->targetInfo.filePathPtr = malloc(filePathLength);
+            if (!fileInfoPtr->targetInfo.filePathPtr)
+            {
+                *isOkPtr = false;
+                goto cleanup;
+            }
+            if (snprintf(fileInfoPtr->targetInfo.filePathPtr,
+                         filePathLength,
+                         "%s/%s", 
+                         filePathPtr, 
+                         linkTargetPtr) < 0)
+            {
+                *isOkPtr = false;
+                goto cleanup;
+            }
+        }
+        fileInfoPtr->targetInfo.fileNamePtr = &fileInfoPtr->targetInfo.filePathPtr[strlen(fileInfoPtr->targetInfo.filePathPtr) - strlen(linkTargetPtr)];
+
+        fileInfoPtr->targetInfo.isTargetExists = fileInfoIsExists(fileInfoPtr->targetInfo.filePathPtr, isOkPtr);
         if (!*isOkPtr)
         {
             goto cleanup;
+        }
+
+        if (fileInfoPtr->targetInfo.isTargetExists)
+        {
+            if (!fileInfoSetActiveFile(fileInfoPtr->targetInfo.filePathPtr))
+            {
+                *isOkPtr = false;
+                goto cleanup;
+            }
+
+            fileInfoPtr->targetInfo.access = fileInfoGetAccess(isOkPtr);
+            if (!*isOkPtr)
+            {
+                goto cleanup;
+            }
+
+            fileInfoPtr->targetInfo.type = fileInfoGetType(isOkPtr);
+            if (!*isOkPtr)
+            {
+                goto cleanup;
+            }
+
+            char *filePathOrig = 0;
+            char *fileNameOrig = 0;
+            
+            filePathOrig = fileInfoPtr->targetInfo.filePathPtr;
+            fileNameOrig = fileInfoPtr->targetInfo.fileNamePtr;
+
+            char *fileNameBufferPtr = 0;
+            char *linkPathBufferPtr = 0;
+
+            while (fileInfoPtr->targetInfo.type == fileInfoTypeLink && isFollowLink)
+            {
+                fileInfoStruct linkInfo = {0};
+
+                fileInfoGet(fileInfoPtr->targetInfo.filePathPtr, &linkInfo, false, isOkPtr);
+                if (!*isOkPtr)
+                {
+                    break;
+                }
+                fileInfoPtr->targetInfo = linkInfo.targetInfo;
+
+                if (fileNameBufferPtr)
+                {
+                    free(fileNameBufferPtr);
+                }
+                fileNameBufferPtr = linkInfo.fileNamePtr;
+
+                if (linkPathBufferPtr)
+                {
+                    free(linkPathBufferPtr);
+                }
+                linkPathBufferPtr = linkInfo.targetInfo.filePathPtr;
+            }
+
+            if (fileNameBufferPtr)
+            {
+                free(fileNameBufferPtr);
+                fileNameBufferPtr = 0;
+            }
+            if (linkPathBufferPtr)
+            {
+                free(linkPathBufferPtr);
+                linkPathBufferPtr = 0;
+            }
+
+            fileInfoPtr->targetInfo.filePathPtr = filePathOrig;
+            fileInfoPtr->targetInfo.fileNamePtr = fileNameOrig;
         }
     }
 
 cleanup:
 
-    if (filePtrCopy)
+    if (filePtrCopy1)
     {
-        free(filePtrCopy);
-        filePtrCopy = 0;
+        free(filePtrCopy1);
+        filePtrCopy1 = 0;
+    }
+
+    if (filePtrCopy2)
+    {
+        free(filePtrCopy2);
+        filePtrCopy2 = 0;
+    }
+
+    if (linkTargetPtr)
+    {
+        free(linkTargetPtr);
+        linkTargetPtr = 0;
     }
 
     if (!*isOkPtr)
@@ -192,10 +314,10 @@ cleanup:
             free(fileInfoPtr->fileNamePtr);
             fileInfoPtr->fileNamePtr = 0;
         }
-        if (fileInfoPtr->targetPtr)
+        if (fileInfoPtr->targetInfo.filePathPtr)
         {
-            free(fileInfoPtr->targetPtr);
-            fileInfoPtr->targetPtr = 0;
+            free(fileInfoPtr->targetInfo.filePathPtr);
+            fileInfoPtr->targetInfo.filePathPtr = 0;
         }
     }
 }
@@ -472,8 +594,7 @@ size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength, bool *isOkPtr
         *isOkPtr = false;
         return 0;
     }
-    stringPtr[answer] = '\0';
-    ++answer;
+    stringPtr[answer++] = '\0';
 
     return (size_t)answer;
 }
@@ -562,7 +683,7 @@ size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size
 
     if (fileInfoPtr->type == fileInfoTypeLink)
     {
-        APPEND(snprintf(&stringPtr[answer], stringLength - answer, "%s", fileInfoPtr->targetPtr));
+        APPEND(snprintf(&stringPtr[answer], stringLength - answer, "%s", fileInfoPtr->targetInfo.fileNamePtr));
     }
 
     // Перезаписываем последний разделитель на \0

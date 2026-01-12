@@ -1,17 +1,17 @@
 /// @file       fileInfo.h
 /// @brief      Файл с объявлениями модуля получения данных о файле
-/// @details    Порядок работы с модулем:<br>
-///                 1) fileInfoIsExists() для проверки существования файла<br>
-///                 2) fileInfoGet() для получения всей информации о файле<br>
-///                 3) fileInfoSetActiveFile() для установки активного файла<br>
-///                 4) fileInfoClearActiveFile() для сброса активного файла<br>
-///                 5) Функции с префиксом fileInfoGet для получения информации об активном файле<br>
-///                 6) fileInfoToString() для получения строкового представления всей информации о файле<br>
+/// @details    Порядок работы с модулем: <br>
+///                 1) fileInfoIsExists() для проверки существования файла <br>
+///                 2) fileInfoGet() для получения всей информации о файле <br>
+///                 3) fileInfoSetActiveFile() для установки активного файла <br>
+///                 4) fileInfoClearActiveFile() для сброса активного файла <br>
+///                 5) Функции с префиксом fileInfoGet для получения информации об активном файле <br>
+///                 6) fileInfoToString() для получения строкового представления всей информации о файле <br>
 ///                 7) Функции с префиксом fileInfoToString для получения строкового представления информации о файле
 /// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #ifndef _FILE_INFO_H_
-#define _FILE_INFO_H
+#define _FILE_INFO_H_
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -59,7 +59,7 @@ typedef struct fileInfoAccessBitsStruct
     uint8_t execute : 1; ///< Доступ на исполнение
     uint8_t write   : 1; ///< Доступ на запись
     uint8_t read    : 1; ///< Доступ на чтение
-} fileInfoAccessBitsStruct;
+}fileInfoAccessBitsStruct;
 
 /// @brief      Объединение доступа к файлу
 typedef union fileInfoAccessUnion
@@ -76,6 +76,16 @@ typedef struct fileInfoAccessStruct
     fileInfoAccessUnion other; ///< Доступ прочих
 }fileInfoAccessStruct;
 
+/// @brief      Структура информации о цели
+typedef struct fileInfoTargetStruct
+{
+    fileInfoTypesEnum    type;           ///< Тип файла
+    fileInfoAccessStruct access;         ///< Права доступа
+    char                *filePathPtr;    ///< Указатель на строку с полным путем к файлу
+    char                *fileNamePtr;    ///< Указатель на позицию имени файла в filePathPtr
+    bool                 isTargetExists; ///< Флаг существования цели ссылки
+}fileInfoTargetStruct;
+
 /// @brief      Структура информации о файле
 typedef struct fileInfoStruct
 {
@@ -87,10 +97,7 @@ typedef struct fileInfoStruct
     int64_t              size;           ///< Размер файла
     time_t               timeEdit;       ///< Время последнего изменения файла
     char                *fileNamePtr;    ///< Указатель на строку с именем файла
-    size_t               fileNameLength; ///< Длина fileNamePtr
-    char                *targetPtr;      ///< Указатель на строку с путем к цели ссылки
-    size_t               targetLength;   ///< Длина targetPtr
-    bool                 isTargetExists; ///< Флаг существования цели ссылки
+    fileInfoTargetStruct targetInfo;     ///< Информация о цели ссылки
     int64_t              blocks;         ///< Количество занимаемых файлом 512 байтовых блоков
     __uint64_t           deviceNumber;   ///< Номер устройства
 }fileInfoStruct;
@@ -113,12 +120,13 @@ bool fileInfoIsExists(const char *filePtr, bool *isOkPtr);
 /// @details    Данная функция выполняет вызов fileInfoSetActiveFile() с filePtr в качестве аргумента,
 ///                 затем последовательно заполняет структуру fileInfoPtr,
 ///                 выполняя вызовы соответствующих fileInfoGet функций
-/// @param[in]  filePtr     Указатель на путь к файлу
-/// @param[out] fileInfoPtr Указатель на информацию о файле
-/// @param[out] isOkPtr     Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @warning    Для инициализации filePtr и targetPtr используется malloc!
+/// @param[in]  filePtr      Указатель на путь к файлу
+/// @param[out] fileInfoPtr  Указатель на информацию о файле
+/// @param[in]  isFollowLink Флаг следования по ссылке до конца
+/// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
+/// @warning    Для инициализации fileNamePtr и targetInfo.filePathPtr используется malloc!
 ///                 Не забудьте очистить память при удалении fileInfoPtr, если функция вернула true!
-void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool *isOkPtr);
+void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool isFollowLink, bool *isOkPtr);
 
 /// @brief      Функция установки активного файла
 /// @details    Данная функция выполняет запись filePtr и полученных при помощи lstat() данных в 

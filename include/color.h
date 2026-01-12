@@ -1,7 +1,9 @@
 /// @file       color.h
 /// @brief      Файл с объявлениями модуля работы с цветами
 /// @details    Порядок работы с модулем: <br>
-///                 1) TODO () для <br>
+///                 1) colorUpdateColorsList() для обновления списка цветов в соответствии с LS_COLORS <br>
+///                 2) colorGetReset() для получения escape-последовательности сброса цвета <br>
+///                 3) colorFileToESC() для получения escape-последовательности с цветом, соответствующим файлу <br>
 /// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #ifndef _COLOR_H_
@@ -25,29 +27,37 @@
 #define COLOR_ANSI_MAX_COUNT 5
 
 /// @brief      Максимальная длина ANSI команд в строковом виде
+/// @note       Один SGR код занимает 2 символа + разделитель ;
 #define COLOR_ANSI_MAX_LENGTH (COLOR_ANSI_MAX_COUNT * 3)
 
 /// @brief      Максимальная escape-последовательности
-/// @note       Длина \033[m
+/// @note       Длина \033[m = 6
 #define COLOR_ESC_MAX_LENGTH (COLOR_ANSI_MAX_LENGTH + 6)
 
 /*
-    Перечисления
+    Структуры
 */
 
-/*
-    Структуры 
-*/
+#pragma pack (push, 1)
+
+/// @brief      Структура цветов файла и цели символической ссылки
+typedef struct colorFileTargetStruct
+{
+    char file  [COLOR_ESC_MAX_LENGTH]; ///< Escape-последовательность с цветом файла
+    char target[COLOR_ESC_MAX_LENGTH]; ///< Escape-последовательность с цветом цели символической ссылки
+}colorFileTargetStruct;
+
+#pragma pack (pop)
 
 /*
     Прототипы функций
 */
 
 /// @brief      Функция обновления списка цветов
-/// @details    Данная функция выполняет обновление colorsList,
+/// @details    Данная функция выполняет обновление colorList,
 ///                 используя информацию из переменной окружения LS_COLORS
-/// @note       Отсутствующие Ansi коды берутся из colorsListDefault
-/// @return     Возвращает true в случае успешного обновления colorsList.
+/// @note       Отсутствующие Ansi коды берутся из colorListDefault
+/// @return     Возвращает true в случае успешного обновления colorList.
 ///                 В противном случае, возвращает false
 bool colorUpdateColorsList(void);
 
@@ -55,19 +65,14 @@ bool colorUpdateColorsList(void);
 /// @return     Возвращает escape-последовательность, сбрасывающую цвета
 const char *colorGetReset(void);
 
-/// @brief      Функция получения escape-последовательности, соответствующей fileInfoPtr
-/// @details    Данная функция выполняет определение цвета, которым необходимо раскрасить fileInfoPtr, и
-///                 записывает его escape-последовательность в stringPtr длиной stringLength
+/// @brief      Функция получения цветов файла и цели символической ссылки
+/// @details    Данная функция выполняет определение цветов, которыми необходимо раскрасить 
+///                 файл и цель символической ссылки и возврвщает эти цвета в виде
+///                 escape-последовательности
 /// @param[in]  fileInfoPtr  Указатель на информацию о файле
-/// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
-/// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает длинну stringPtr
-size_t colorFileToESC(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t stringLength, bool *isOkPtr);
-
-/*
-    Переменные
-*/
+/// @return     Возвращает цвета файла и цели символической ссылки
+colorFileTargetStruct colorFileToESC(const fileInfoStruct *fileInfoPtr, bool *isOkPtr);
 
 // _COLOR_H_
 #endif

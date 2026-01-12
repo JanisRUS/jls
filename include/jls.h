@@ -1,15 +1,16 @@
 /// @file       jls.h
 /// @brief      Файл с объявлениями модуля вывода данных о файле или содержимым директории
-/// @details    Порядок работы с модулем:<br>
-///                 1) jls() для сбора и вывода информации о файле/файлах в директории<br>
-///                 2) jlsPrintFileInfo() для вывода информации о файле<br>
-///                 3) jlsGetCommonInfo() для получения общей информации о файлах в директории<br>
-///                 4) jlsGetFilesList() для получения списка файлов в директории<br>
-///                 5) jlsSortFilesList() для сортировки списка файлов<br>
-///                 6) jlsCountFilesInDirectory() для подсчета количества файлов в директории<br>
-///                 7) jlsCalculateAlignment() для расчета максимальных размеров полей информации о файле<br>
-/// @note       Для настройки вывода, модулем используются следующие переменные:<br>
+/// @details    Порядок работы с модулем: <br>
+///                 1) jls() для сбора и вывода информации о файле/файлах в директории <br>
+///                 2) jlsPrintFileInfo() для вывода информации о файле <br>
+///                 3) jlsGetCommonInfo() для получения общей информации о файлах в директории <br>
+///                 4) jlsGetFilesList() для получения списка файлов в директории <br>
+///                 5) jlsSortFilesList() для сортировки списка файлов <br>
+///                 6) jlsCountFilesInDirectory() для подсчета количества файлов в директории <br>
+///                 7) jlsCalculateAlignment() для расчета максимальных размеров полей информации о файле <br>
+/// @note       Для настройки вывода, модулем используются следующие переменные: <br>
 ///                 1) jlsIsSafeModeEnabled <br>
+///                 2) jlsIsColorModeEnabled <br>
 /// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #ifndef _JLS_H_
@@ -18,6 +19,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "color.h"
 
 /*
     Макроподстановки
@@ -97,12 +99,14 @@ int jls(const char *filePtr);
 /// @details    Данная функция выпоняет вывод fileInfoStringPtr с учетом значений из alignmentPtr
 /// @param[in]  fileInfoStringPtr Указатель на строку с информацией о файле
 /// @warning    Строка fileInfoStringPtr должна соответствовать строке, получаемой при помощи fileInfoToString()
-/// @param[in]  alignmentPtr      Указатель структуру максимальных размеров полей информации о файле
+/// @param[in]  alignmentPtr      Указатель на структуру максимальных размеров полей информации о файле
 /// @param[in]  safeType          Тип безопасного режима
 /// @note       Можно отключить при помощи сброса jlsIsSafeModeEnabled
+/// @param[in]  colorsPtr         Указатель на структуру цветов. Может быть равен 0
+/// @note       Можно отключить при помощи сброса jlsIsColorModeEnabled
 /// @param[out] isOkPtr           Указатель на флаг успешного выполнения операции. Может быть равен 0
 /// @note       Указатель alignmentPtr может быть равен 0
-void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr, jlsSafeTypesEnum safeType, bool *isOkPtr);
+void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr, jlsSafeTypesEnum safeType, const colorFileTargetStruct *colorsPtr, bool *isOkPtr);
 
 /// @brief      Функция получения общей информациии о файлах в директории
 /// @details    Данная функция выполняет получение общей информации о файлах в директории
@@ -190,6 +194,11 @@ size_t jlsMakeStringSafe(const char *stringPtr, char *safePtr, size_t safePtrLen
 /// @details    Если установлен, названия файлов с запрещенными символами будут выведены в экранирующих символах
 /// @note       По умолчанию выключен
 extern bool jlsIsSafeModeEnabled;
+
+/// @brief      Флаг цветного вывода информации о файлах
+/// @details    Если установлен, названия файлов будут раскрашены
+/// @note       По умолчанию выключен
+extern bool jlsIsColorModeEnabled;
 
 // _JLS_H_
 #endif

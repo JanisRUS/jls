@@ -30,11 +30,10 @@ int main(int argc, char *argv[])
 
     bool testMode = false;
 
-    jlsIsSafeModeEnabled = false;
-
     if (isatty(STDOUT_FILENO))
     {
-        jlsIsSafeModeEnabled = true;
+        jlsIsSafeModeEnabled  = true;
+        jlsIsColorModeEnabled = true;
     }
 
     /*
@@ -55,10 +54,31 @@ int main(int argc, char *argv[])
                 goto cleanup;
             }
             
+            if (strcmp(arg, "-c")           == 0 ||
+                strcmp(arg, "--color-mode") == 0)
+            {
+                jlsIsColorModeEnabled = true;
+                continue;
+            }
+            
+            if (strcmp(arg, "-C")               == 0 ||
+                strcmp(arg, "--colorless-mode") == 0)
+            {
+                jlsIsColorModeEnabled = false;
+                continue;
+            }
+            
             if (strcmp(arg, "-s")          == 0 ||
                 strcmp(arg, "--safe-mode") == 0)
             {
                 jlsIsSafeModeEnabled = true;
+                continue;
+            }
+            
+            if (strcmp(arg, "-S")            == 0 ||
+                strcmp(arg, "--unsafe-mode") == 0)
+            {
+                jlsIsSafeModeEnabled = false;
                 continue;
             }
             
