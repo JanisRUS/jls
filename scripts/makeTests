@@ -375,8 +375,7 @@ function performCompareTest()
     if [ "$COMMON_MODE" == "${COMMON_MODES_LIST[0]}" ]
     then
         JLS_MODE+="--safe-mode --color-mode"
-        #TODO удалить -w 80
-        LS_MODE+="--quoting-style=shell --color=always -w 80"
+        LS_MODE+="--quoting-style=shell --color=always"
     fi
 
     /usr/bin/time -q -f "uptime=%e sec | peak-memory=%M KiB" -o "$TMP_FILE" "$COMMON_JLS" $JLS_MODE $ARG >> "$JLS_OUTPUT_FILE" 2>&1

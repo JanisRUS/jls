@@ -382,7 +382,6 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
     // Информация для вывода \033[K
     size_t visibleCharsCount   = 0;
     size_t nameStartCharNumber = 0;
-    bool   shouldTryK          = false;
 
     nameStartCharNumber = printf("%s%s %*s %-*s %-*s %*s %s ", fileInfoStringTypePtr,
                                                                fileInfoStringAccessPtr,
@@ -392,8 +391,6 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
                                 (int)alignmentPtr->size,       fileInfoStringSizePtr,
                                                                fileInfoStringTimeEditPtr);
 
-    // Пробел перед именем файла не учитывается
-    --nameStartCharNumber;
     if (!jlsIsSafeModeEnabled)
     {
         safeType = jlsSafeTypeNone;
@@ -418,12 +415,11 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
         if (before == after)
         {
             printf(" ");
+            ++nameStartCharNumber;
         }
 
         fileInfoStringFilePtr = &safeStringFile[0];
     }
-
-    visibleCharsCount = strlen(fileInfoStringFilePtr);
 
     if (!jlsIsColorModeEnabled)
     {
@@ -442,14 +438,20 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
             }
             printf("%s", &colorsPtr->file[0]);
             isColored  = true;
-            shouldTryK = true;
         }
 
-        printf("%s", fileInfoStringFilePtr);
+        visibleCharsCount = printf("%s", fileInfoStringFilePtr);
+        
         if (isColored)
         {
             printf("%s", jlsResetColorESC);
+            if (nameStartCharNumber / jlsMaxVisibleChars != (nameStartCharNumber + visibleCharsCount - 1) / jlsMaxVisibleChars)
+            {
+                printf("\033[K");
+            }
         }
+        
+        nameStartCharNumber += visibleCharsCount;
     }
 
     char safeStringTarget[FILE_INFO_TARGET_LENGTH_MAX] = {0};
@@ -468,8 +470,8 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
             fileInfoStringTargetPtr = &safeStringTarget[0];
         }
 
-        visibleCharsCount = printf(" -> ");
-        visibleCharsCount = strlen(fileInfoStringTargetPtr);
+        visibleCharsCount    = printf(" -> ");
+        nameStartCharNumber += visibleCharsCount;
 
         if (!jlsIsColorModeEnabled)
         {
@@ -488,37 +490,22 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
                 }
                 printf("%s", &colorsPtr->target[0]);
                 isColored  = true;
-                shouldTryK = true;
             }
 
-            printf("%s", fileInfoStringTargetPtr);
-
+            visibleCharsCount = printf("%s", fileInfoStringTargetPtr);
+            
             if (isColored)
             {
                 printf("%s", jlsResetColorESC);
+                if (nameStartCharNumber / jlsMaxVisibleChars != (nameStartCharNumber + visibleCharsCount - 1) / jlsMaxVisibleChars)
+                {
+                    printf("\033[K");
+                }
             }
+            
+            nameStartCharNumber += visibleCharsCount;
         }
     }
-
-    if (shouldTryK && nameStartCharNumber / jlsMaxVisibleChars != (nameStartCharNumber + visibleCharsCount - 1) / jlsMaxVisibleChars)
-    {
-        printf("\033[K");
-    }
-    
-    // TODO удалить
-    /*if (fileInfoStringFilePtr[0] == 'd' && 
-        fileInfoStringFilePtr[1] == 'b' && 
-        fileInfoStringFilePtr[2] == 'u' && 
-        fileInfoStringFilePtr[3] == 's' && 
-        fileInfoStringFilePtr[4] == '-' && 
-        fileInfoStringFilePtr[5] == 'u' && 
-        fileInfoStringFilePtr[6] == 'p')
-    {
-        printf("FLAG\n");
-        printf("nameStartCharNumber: %lu\n", nameStartCharNumber);
-        printf("jlsMaxVisibleChars:  %lu\n", jlsMaxVisibleChars);
-        printf("visibleCharsCount:   %lu\n", visibleCharsCount);
-    }*/
 
     printf("\n");
 }
@@ -638,7 +625,7 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
         }
 
         /*
-            Рассчет answer.alignment
+            Расчет answer.alignment
         */
 
         static const char  delimer[] = {FILE_INFO_TO_STRING_DELIMER, '\0'};
@@ -674,7 +661,7 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
         }
 
         /*
-            Рассчет answer.safeType
+            Расчет answer.safeType
         */
 
         if (jlsIsSafeModeEnabled)
@@ -714,7 +701,7 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
         }
 
         /*
-            Рассчет answer.blocks
+            Расчет answer.blocks
         */
 
         answer.total += fileInfo.blocks;
@@ -1349,8 +1336,6 @@ static void jlsUpdateMaxVisibleChars(void)
 
     if (!jlsIsColorModeEnabled)
     {
-        // TODO удалить
-        //printf("COLOR MODE FAILED\n");
         goto updateMaxVisibleChars;
     }
     
@@ -1361,14 +1346,10 @@ static void jlsUpdateMaxVisibleChars(void)
         newMaxVisibleChars = winSize.ws_col;
         goto updateMaxVisibleChars;
     }
-    // TODO удалить
-    //printf("IOCTL FAILED\n");
 
     char *env = getenv("COLUMNS");
     if (!env)
     {
-        // TODO удалить
-        //printf("COLUMNS FAILED\n");
         goto updateMaxVisibleChars;
     }
 
@@ -1378,8 +1359,6 @@ static void jlsUpdateMaxVisibleChars(void)
     columns = strtoull(env, &envEnd, 10);
     if (env == envEnd || *envEnd != '\0' || errno != 0)
     {
-        // TODO удалить
-        //printf("STRTOULL FAILED\n");
         goto updateMaxVisibleChars;
     }
 
@@ -1387,8 +1366,6 @@ static void jlsUpdateMaxVisibleChars(void)
 
 updateMaxVisibleChars:
     jlsMaxVisibleChars = newMaxVisibleChars;
-    // TODO удалить
-    //printf("jlsMaxVisibleChars %lu\n", jlsMaxVisibleChars);
 }
 
 static size_t jlsPathSet(const char *pathPtr, char *bufferPtr, size_t bufferSize, bool *isOkPtr)
