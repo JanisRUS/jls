@@ -18,6 +18,16 @@ int main(int argc, char *argv[])
 
     setlocale(LC_ALL, "");
     
+    char **filesList = 0;
+    int   filesCount = 0;
+
+    char **dirsList  = 0;
+    int   dirsCount  = 0;
+
+    /*
+        Параметры ПО
+    */
+
     bool testMode = false;
 
     jlsIsSafeModeEnabled = false;
@@ -27,6 +37,9 @@ int main(int argc, char *argv[])
         jlsIsSafeModeEnabled = true;
     }
 
+    /*
+        Парсинг аргументов
+    */
     int filesIndex = -1;
 
     for (int i = 1; i < argc; ++i)
@@ -69,12 +82,34 @@ int main(int argc, char *argv[])
         }
     }
 
+    /*
+        Запуск без файлов в аргументах
+    */
+
     if (filesIndex == -1)
     {
         if (jls(".") != 0)
         {
             isOk = false;
         }
+        goto cleanup;
+    }
+
+    /*
+        Запуск с файлами в аргументах
+    */
+
+    filesList = calloc(argc - filesIndex, sizeof(char *));
+    if (!filesList)
+    {
+        isOk = false;
+        goto cleanup;
+    }
+
+    dirsList = calloc(argc - filesIndex, sizeof(char *));
+    if (!dirsList)
+    {
+        isOk = false;
         goto cleanup;
     }
 
@@ -91,30 +126,59 @@ int main(int argc, char *argv[])
 
                 fprintf(stderr, "%s: cannot access '%s': No such file or directory\n", testMode ? nameTest : nameUsual, filePtr);
             }
+            continue;
         }
-    }
-
-    for (int i = filesIndex; i < argc; ++i)
-    {
-        char *filePtr = argv[i];
-
         if (!fileInfoSetActiveFile(filePtr))
         {
             continue;
         }
 
-        if (argc - filesIndex > 1 && fileInfoGetType(0) == fileInfoTypeDirectory)
+        if (fileInfoGetType(0) == fileInfoTypeDirectory)
         {
-            printf("\n%s:\n", filePtr);
+            dirsList[dirsCount++] = filePtr;
         }
+        else
+        {
+            filesList[filesCount++] = filePtr;
+        }
+    }
 
-        if (jls(argv[i]) != 0)
+    for (int i = 0; i < filesCount; ++i)
+    {
+        if (jls(filesList[i]) != 0)
         {
             isOk = false;
+            goto cleanup;
+        }
+    }
+
+    for (int i = 0; i < dirsCount; ++i)
+    {
+        if (filesCount > 1)
+        {
+            printf("\n%s:\n", dirsList[i]);
+        }
+
+        if (jls(dirsList[i]) != 0)
+        {
+            isOk = false;
+            goto cleanup;
         }
     }
 
 cleanup:
+    if (filesList)
+    {
+        free(filesList);
+        filesList = 0;
+    }
+
+    if (dirsList)
+    {
+        free(dirsList);
+        dirsList = 0;
+    }
+
     fileInfoClearActiveFile();
 
     if (isOk)
