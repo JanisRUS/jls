@@ -47,6 +47,9 @@ readonly COMMON_RESET='\033[0m'
 # @brief    Флаг наличия valgrind в системе
 COMMON_IS_VALGRIND_EXISTS=0
 
+# @brief    Флаг наличия meld в системе
+COMMON_IS_MELD_EXISTS=0
+
 # @brief    Список тестов и их аргументов
 # @warning  Элементы в списке расположены как [i % 2 != 0] = "Название теста" [i % 2 == 0] = "Аргумент для jls" и тд.
 COMMON_TESTS_ARGS_LIST=()
@@ -153,6 +156,14 @@ function main()
             echo -en "$COMMON_RED"
             RESULT="Failed"
             ((FAILED_COUNT++))
+            
+            local LS_FILE="$COMMON_TESTS_DIR/${TEST}${MODE}${TYPE}.ls"
+            local JLS_FILE="$COMMON_TESTS_DIR/${TEST}${MODE}${TYPE}.jls"
+
+            if [ "$COMMON_IS_MELD_EXISTS" == "1" ] && [ "${TYPE}" == "Compare" ] && [ -f "$LS_FILE" ] && [ -f "$JLS_FILE" ]
+            then
+                meld -n "$LS_FILE" "$JLS_FILE" &
+            fi
         fi
 
         printf "[%*d] %-*s %-*s %-*s %s" "$TEST_NUMBER_MAX_LENGTH" "$((TEST_NUMBER + 1))" "$TEST_NAME_MAX_LENGTH" "$TEST" "$TEST_MODE_MAX_LENGTH" "$MODE" "$TEST_TYPE_MAX_LENGTH" "$TYPE" "$RESULT"
@@ -184,7 +195,7 @@ function main()
 # @brief    Функция подготовки рабочего окружения
 # @details  Данная функция выполняет проверку существования jls,
 #               проверку существования тестовой среды, её очистку от логов тестов
-#               проверку наличия valgrind и
+#               проверку наличия valgrind, meld и
 #               формирует список тестов в переменной <COMMON_TESTS_ARGS_LIST>
 # @return   Возвращает 0 в случае успешной подготовки рабочего окружения.
 #               В противном случае, возвращет 1
@@ -252,6 +263,11 @@ function prepare()
     if command -v valgrind >> /dev/null 2>&1
     then
         COMMON_IS_VALGRIND_EXISTS=1
+    fi
+
+    if command -v meld >> /dev/null 2>&1
+    then
+        COMMON_IS_MELD_EXISTS=1
     fi
 
     return 0

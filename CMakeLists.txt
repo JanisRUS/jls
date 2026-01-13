@@ -24,6 +24,15 @@ else()
     message(STATUS "Command to install this package:\n\t sudo apt install valgrind")
 endif()
 
+# Проверка наличия в системе meld
+find_program(MELD meld)
+if (MELD)
+    message(STATUS "Meld found: ${MELD}")
+else()
+    message(STATUS "Meld not found. Failed Comapre tests will not be visualized")
+    message(STATUS "Command to install this package:\n\t sudo apt install meld")
+endif()
+
 # Основные настройки проекта
 set(SOURCES_DIR "src")
 set(HEADERS_DIR "include")
