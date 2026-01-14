@@ -33,6 +33,15 @@ else()
     message(STATUS "Command to install this package:\n\t sudo apt install meld")
 endif()
 
+# Проверка наличия в системе time
+find_program(TIME /usr/bin/time)
+if (TIME)
+    message(STATUS "/usr/bin/time found: ${TIME}")
+else()
+    message(STATUS "/usr/bin/time not found. Unable to calculate ${PROJECT_NAME} and ls -l uptime and RAM consumption")
+    message(STATUS "Command to install this package:\n\t sudo apt install time")
+endif()
+
 # Основные настройки проекта
 set(SOURCES_DIR "src")
 set(HEADERS_DIR "include")

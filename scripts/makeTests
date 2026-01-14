@@ -51,6 +51,9 @@ COMMON_IS_VALGRIND_EXISTS=0
 # @brief    Флаг наличия meld в системе
 COMMON_IS_MELD_EXISTS=0
 
+# @brief    Флаг наличия /usr/bin/time в системе
+COMMON_IS_TIME_EXISTS=0
+
 # @brief    Список тестов и их аргументов
 # @warning  Элементы в списке расположены как [i % 2 != 0] = "Название теста" [i % 2 == 0] = "Аргумент для jls" и тд.
 COMMON_TESTS_ARGS_LIST=()
@@ -225,7 +228,7 @@ function main()
 # @brief    Функция подготовки рабочего окружения
 # @details  Данная функция выполняет проверку существования jls,
 #               проверку существования тестовой среды, её очистку от логов тестов
-#               проверку наличия valgrind, meld и
+#               проверку наличия valgrind, meld, /usr/bin/time и
 #               формирует список тестов в переменной <COMMON_TESTS_ARGS_LIST>
 # @return   Возвращает 0 в случае успешной подготовки рабочего окружения.
 #               В противном случае, возвращет 1
@@ -239,7 +242,7 @@ function prepare()
 
     if ! [ -d "$COMMON_TESTS_DIR" ]
     then
-        echo -e "Test environment doesn't exist! Use:\n\tmake testEnv"
+        echo -e "Test environment doesn't exist! Use:\n\t# scripts/makeTestEnv"
         return 1
     fi
 
@@ -298,6 +301,11 @@ function prepare()
     if command -v meld >> /dev/null 2>&1
     then
         COMMON_IS_MELD_EXISTS=1
+    fi
+
+    if command -v /usr/bin/time >> /dev/null 2>&1
+    then
+        COMMON_IS_TIME_EXISTS=1
     fi
 
     return 0
@@ -366,8 +374,6 @@ function performCompareTest()
         return 1
     fi
 
-    local JLS_INFO=""
-    local  LS_INFO=""
     local TMP_FILE="/tmp/$COMMON_SCRIPT_NAME.info"    
 
     local JLS_MODE="--test-mode "
@@ -378,16 +384,25 @@ function performCompareTest()
         LS_MODE+="--quoting-style=shell --color=always"
     fi
 
-    /usr/bin/time -q -f "uptime=%e sec | peak-memory=%M KiB" -o "$TMP_FILE" "$COMMON_JLS" $JLS_MODE $ARG >> "$JLS_OUTPUT_FILE" 2>&1
-    JLS_INFO=$(< "$TMP_FILE")
-    rm -f "$TMP_FILE"
+    if [ "$COMMON_IS_TIME_EXISTS" == "1" ]
+    then
+        local JLS_INFO=""
+        local  LS_INFO=""
+        
+        /usr/bin/time -q -f "uptime=%e sec | peak-memory=%M KiB" -o "$TMP_FILE" "$COMMON_JLS" $JLS_MODE $ARG >> "$JLS_OUTPUT_FILE" 2>&1
+        JLS_INFO=$(< "$TMP_FILE")
+        rm -f "$TMP_FILE"
 
-    /usr/bin/time -q -f "uptime=%e sec | peak-memory=%M KiB" -o "$TMP_FILE" ls -l $LS_MODE $ARG >> "$LS_OUTPUT_FILE" 2>&1
-    LS_INFO=$(< "$TMP_FILE")
-    rm -f "$TMP_FILE"
+        /usr/bin/time -q -f "uptime=%e sec | peak-memory=%M KiB" -o "$TMP_FILE" ls -l $LS_MODE $ARG >> "$LS_OUTPUT_FILE" 2>&1
+        LS_INFO=$(< "$TMP_FILE")
+        rm -f "$TMP_FILE"
 
-    echo "jls info: $JLS_INFO"
-    echo "ls  info: $LS_INFO"
+        echo "jls info: $JLS_INFO"
+        echo "ls  info: $LS_INFO"
+    else
+        "$COMMON_JLS" $JLS_MODE $ARG >> "$JLS_OUTPUT_FILE" 2>&1
+        ls -l $LS_MODE $ARG >> "$LS_OUTPUT_FILE" 2>&1
+    fi
 
     if ! diff  "$LS_OUTPUT_FILE" "$JLS_OUTPUT_FILE" >> "$DIFF_OUTPUT_FILE" 2>&1
     then
