@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
 
     for (int i = 0; i < dirsCount; ++i)
     {
-        if (filesCount > 1)
+        if (filesCount > 0)
         {
             printf("\n%s:\n", dirsList[i]);
         }
