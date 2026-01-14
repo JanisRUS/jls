@@ -1,6 +1,6 @@
 /// @file       jls.c
 /// @brief      См. jls.h
-/// @author     Тузиков Г.А.
+/// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #include "jls.h"
 #include "fileInfo.h"
@@ -12,10 +12,21 @@
 #include <stddef.h>
 #include <wchar.h>
 #include <wctype.h>
+#include <errno.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
 /*
     Прототипы внутренних функций
 */
+
+/// @brief      Функция обновления значения jlsMaxVisibleChars
+/// @details    Данная функция выполняет считывание максимальной ширины окна у одного из следующих источников: <br>
+///                 -) ioctl <br>
+///                 -) Переменная окружения COLUMNS <br>
+///                 -) jlsMaxVisibleCharsDefault <br>
+///                 Результат записывается в jlsMaxVisibleChars
+static void jlsUpdateMaxVisibleChars(void);
 
 /// @brief      Функция установки пути, где находятся файлы
 /// @details    Данная функция выполняет запись pathPtr в bufferPtr размером bufferSize
@@ -57,16 +68,40 @@ static int jlsFilesListCompareDescend(const void *a, const void *b);
 static bool jlsCheckIsUnsafe(const char *stringPtr, bool *isOkPtr);
 
 /*
+    Внутренние переменные
+*/
+
+/// @brief      Escape-последовательность для сброса цветов
+const char *jlsResetColorESC = "";
+
+/// @brief      Отпуступы по умолчанию
+const jlsAlignmentStruct jlsAlignmentDefault = 
+{
+    .linksCount = 1,
+    .owner      = 0,
+    .group      = 0,
+    .size       = 4
+};
+
+/// @brief      Максимальное количество выводимых видимых символов по умолчанию
+const uint64_t jlsMaxVisibleCharsDefault = 80;
+
+/// @brief      Максимальное количество выводимых видимых символов
+uint64_t jlsMaxVisibleChars = jlsMaxVisibleCharsDefault;
+
+/*
     Переменные
 */
 
 bool jlsIsSafeModeEnabled = false;
 
+bool jlsIsColorModeEnabled = false;
+
 /*
     Функции
 */
 
-int jls(const char *filePtr)
+int jls(const char *filePtr, const jlsAlignmentStruct *alignmentPtr, jlsSafeTypesEnum safeType)
 {
     static char    fileInfoString[JLS_FILE_INFO_MAX_LENGTH] = {0};
     static size_t  fileInfoStringLength = 0;
@@ -77,13 +112,30 @@ int jls(const char *filePtr)
     fileInfoStruct      fileInfo   = {0};
     jlsCommonInfoStruct commonInfo = {0};
 
+    if (!alignmentPtr)
+    {
+        alignmentPtr = &jlsAlignmentDefault;
+    }
+
     if (!filePtr)
     {
         isOk = false;
         goto cleanup;
     }
 
-    fileInfoGet(filePtr, &fileInfo, &isOk);
+    if (jlsIsColorModeEnabled)
+    {
+        colorUpdateColorsList();
+        jlsResetColorESC = colorGetReset();
+        if (!jlsResetColorESC)
+        {
+            isOk = false;
+            goto cleanup;
+        }
+        jlsUpdateMaxVisibleChars();
+    }
+
+    fileInfoGet(filePtr, &fileInfo, true, &isOk);
     if (!isOk)
     {
         goto cleanup;
@@ -105,40 +157,23 @@ int jls(const char *filePtr)
         }
         
         strcpy(fileInfo.fileNamePtr, filePtr);
-        fileInfo.fileNameLength = strlen(filePtr) + 1;
 
         fileInfoStringLength = fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH, &isOk);
         if (isOk)
         {
-            bool             isFileUnsafe   = false;
-            bool             isTargetUnsafe = false;
-            jlsSafeTypesEnum safeType       = jlsSafeTypeNone;
+            colorFileTargetStruct colors = {0};
 
-            isFileUnsafe = jlsCheckIsUnsafe(fileInfo.fileNamePtr, &isOk);
-            if (!isOk)
+            if (jlsIsColorModeEnabled)
             {
-                goto cleanup;
-            }
-
-            if (fileInfo.type == fileInfoTypeLink)
-            {
-                isTargetUnsafe = jlsCheckIsUnsafe(fileInfo.targetPtr, &isOk);
+                colors = colorFileToESC(&fileInfo, &isOk);
                 if (!isOk)
                 {
                     goto cleanup;
                 }
             }
 
-            if (isFileUnsafe)
-            {
-                safeType += jlsSafeTypeName;
-            }
-            if (isTargetUnsafe)
-            {
-                safeType += jlsSafeTypeTarget;
-            }
-
-            jlsPrintFileInfo(&fileInfoString[0], 0, safeType, &isOk);
+            jlsPrintFileInfo(&fileInfoString[0], alignmentPtr, safeType, &colors, &isOk);
+            goto cleanup;
         }
         goto cleanup;
     }
@@ -181,10 +216,10 @@ int jls(const char *filePtr)
             free(fileInfo.fileNamePtr);
             fileInfo.fileNamePtr = 0;
         }
-        if (fileInfo.targetPtr)
+        if (fileInfo.targetInfo.filePathPtr)
         {
-            free(fileInfo.targetPtr);
-            fileInfo.targetPtr = 0;
+            free(fileInfo.targetInfo.filePathPtr);
+            fileInfo.targetInfo.filePathPtr = 0;
         }
     
         jlsPathAppend(fileName, &fullPath[0], pathLength, PATH_MAX, &isOk);
@@ -193,7 +228,7 @@ int jls(const char *filePtr)
             goto cleanup;
         }
 
-        fileInfoGet(&fullPath[0], &fileInfo, &isOk);
+        fileInfoGet(&fullPath[0], &fileInfo, true, &isOk);
         if (!isOk)
         {
             goto cleanup;
@@ -205,7 +240,18 @@ int jls(const char *filePtr)
             goto cleanup;
         }
 
-        jlsPrintFileInfo(&fileInfoString[0], &commonInfo.alignment, commonInfo.safeType, &isOk);
+        colorFileTargetStruct colors = {0};
+
+        if (jlsIsColorModeEnabled)
+        {
+            colors = colorFileToESC(&fileInfo, &isOk);
+            if (!isOk)
+            {
+                goto cleanup;
+            }
+        }
+
+        jlsPrintFileInfo(&fileInfoString[0], &commonInfo.alignment, commonInfo.safeType, &colors, &isOk);
         if (!isOk)
         {
             goto cleanup;
@@ -218,10 +264,10 @@ cleanup:
         free(fileInfo.fileNamePtr);
         fileInfo.fileNamePtr = 0;
     }
-    if (fileInfo.targetPtr)
+    if (fileInfo.targetInfo.filePathPtr)
     {
-        free(fileInfo.targetPtr);
-        fileInfo.targetPtr = 0;
+        free(fileInfo.targetInfo.filePathPtr);
+        fileInfo.targetInfo.filePathPtr = 0;
     }
 
     if (commonInfo.files.list)
@@ -251,7 +297,7 @@ cleanup:
     }
 }
 
-void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr, jlsSafeTypesEnum safeType, bool *isOkPtr)
+void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *alignmentPtr, jlsSafeTypesEnum safeType, const colorFileTargetStruct *colorsPtr, bool *isOkPtr)
 {
     static const char delimer[] = {FILE_INFO_TO_STRING_DELIMER, '\0'};
     
@@ -272,11 +318,19 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
         return;
     }
 
-    jlsAlignmentStruct alignment = {0};
+    jlsAlignmentStruct alignment = jlsAlignmentDefault;
 
     if (!alignmentPtr)
     {
         alignmentPtr = &alignment;
+    }
+
+    colorFileTargetStruct colors = {0};
+    static bool isResetPrinted = false;
+
+    if (!jlsIsColorModeEnabled || !colorsPtr)
+    {
+        colorsPtr = &colors;
     }
 
     memcpy(&buffer[0], &fileInfoStringPtr[0], strlen(fileInfoStringPtr) < JLS_FILE_INFO_MAX_LENGTH - 1 ? 
@@ -302,13 +356,17 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
     fileInfoStringFilePtr       = strtok(NULL,       delimer);
     fileInfoStringTargetPtr     = strtok(NULL,       delimer);
 
-    printf("%s%s %*s %-*s %-*s %*s %s ", fileInfoStringTypePtr,
-                                         fileInfoStringAccessPtr,
-          (int)alignmentPtr->linksCount, fileInfoStringLinksCountPtr,
-          (int)alignmentPtr->owner,      fileInfoStringOwnerPtr,
-          (int)alignmentPtr->group,      fileInfoStringGroupPtr,
-          (int)alignmentPtr->size,       fileInfoStringSizePtr,
-                                         fileInfoStringTimeEditPtr);
+    // Информация для вывода \033[K
+    size_t visibleCharsCount   = 0;
+    size_t nameStartCharNumber = 0;
+
+    nameStartCharNumber = printf("%s%s %*s %-*s %-*s %*s %s ", fileInfoStringTypePtr,
+                                                               fileInfoStringAccessPtr,
+                                (int)alignmentPtr->linksCount, fileInfoStringLinksCountPtr,
+                                (int)alignmentPtr->owner,      fileInfoStringOwnerPtr,
+                                (int)alignmentPtr->group,      fileInfoStringGroupPtr,
+                                (int)alignmentPtr->size,       fileInfoStringSizePtr,
+                                                               fileInfoStringTimeEditPtr);
 
     if (!jlsIsSafeModeEnabled)
     {
@@ -334,11 +392,44 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
         if (before == after)
         {
             printf(" ");
+            ++nameStartCharNumber;
         }
 
         fileInfoStringFilePtr = &safeStringFile[0];
     }
-    printf("%s", fileInfoStringFilePtr);
+
+    if (!jlsIsColorModeEnabled)
+    {
+        printf("%s", fileInfoStringFilePtr);
+    }
+    else
+    {
+        bool isColored = false;
+
+        if (strcmp(&colorsPtr->file[0], jlsResetColorESC) != 0)
+        {
+            if (!isResetPrinted)
+            {
+                printf("%s", jlsResetColorESC);
+                isResetPrinted = true;
+            }
+            printf("%s", &colorsPtr->file[0]);
+            isColored  = true;
+        }
+
+        visibleCharsCount = printf("%s", fileInfoStringFilePtr);
+        
+        if (isColored)
+        {
+            printf("%s", jlsResetColorESC);
+            if (nameStartCharNumber / jlsMaxVisibleChars != (nameStartCharNumber + visibleCharsCount - 1) / jlsMaxVisibleChars)
+            {
+                printf("\033[K");
+            }
+        }
+        
+        nameStartCharNumber += visibleCharsCount;
+    }
 
     char safeStringTarget[FILE_INFO_TARGET_LENGTH_MAX] = {0};
 
@@ -355,7 +446,42 @@ void jlsPrintFileInfo(const char *fileInfoStringPtr, const jlsAlignmentStruct *a
 
             fileInfoStringTargetPtr = &safeStringTarget[0];
         }
-        printf(" -> %s", fileInfoStringTargetPtr);
+
+        visibleCharsCount    = printf(" -> ");
+        nameStartCharNumber += visibleCharsCount;
+
+        if (!jlsIsColorModeEnabled)
+        {
+            printf("%s", fileInfoStringTargetPtr);
+        }
+        else
+        {
+            bool isColored = false;
+
+            if (strcmp(&colorsPtr->target[0], jlsResetColorESC) != 0)
+            {
+                if (!isResetPrinted)
+                {
+                    printf("%s", jlsResetColorESC);
+                    isResetPrinted = true;
+                }
+                printf("%s", &colorsPtr->target[0]);
+                isColored  = true;
+            }
+
+            visibleCharsCount = printf("%s", fileInfoStringTargetPtr);
+            
+            if (isColored)
+            {
+                printf("%s", jlsResetColorESC);
+                if (nameStartCharNumber / jlsMaxVisibleChars != (nameStartCharNumber + visibleCharsCount - 1) / jlsMaxVisibleChars)
+                {
+                    printf("\033[K");
+                }
+            }
+            
+            nameStartCharNumber += visibleCharsCount;
+        }
     }
 
     printf("\n");
@@ -392,7 +518,7 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
         goto cleanup;
     }
 
-    answer.files.list = calloc(answer.files.count, sizeof(char *));
+    answer.files.list = calloc(answer.files.count, sizeof(answer.files.list));
     if (!answer.files.list)
     {
         *isOkPtr = false;
@@ -457,13 +583,13 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
             free(fileInfo.fileNamePtr);
             fileInfo.fileNamePtr = 0;
         }
-        if (fileInfo.targetPtr)
+        if (fileInfo.targetInfo.filePathPtr)
         {
-            free(fileInfo.targetPtr);
-            fileInfo.targetPtr = 0;
+            free(fileInfo.targetInfo.filePathPtr);
+            fileInfo.targetInfo.filePathPtr = 0;
         }
 
-        fileInfoGet(&fullPath[0], &fileInfo, isOkPtr);
+        fileInfoGet(&fullPath[0], &fileInfo, false, isOkPtr);
         if (!*isOkPtr)
         {
             goto cleanup;
@@ -476,7 +602,7 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
         }
 
         /*
-            Рассчет answer.alignment
+            Расчет answer.alignment
         */
 
         static const char  delimer[] = {FILE_INFO_TO_STRING_DELIMER, '\0'};
@@ -512,7 +638,7 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
         }
 
         /*
-            Рассчет answer.safeType
+            Расчет answer.safeType
         */
 
         if (jlsIsSafeModeEnabled)
@@ -531,7 +657,7 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
 
             if (!isTargetUnsafe && fileInfo.type == fileInfoTypeLink)
             {
-                isTargetUnsafe = jlsCheckIsUnsafe(fileInfo.targetPtr, isOkPtr);
+                isTargetUnsafe = jlsCheckIsUnsafe(fileInfo.targetInfo.fileNamePtr, isOkPtr);
                 if (!*isOkPtr)
                 {
                     goto cleanup;
@@ -552,10 +678,10 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
         }
 
         /*
-            Рассчет answer.blocks
+            Расчет answer.blocks
         */
 
-        answer.total += fileInfoGet512BytesBlocks(isOkPtr);
+        answer.total += fileInfo.blocks;
         if (!*isOkPtr)
         {
             goto cleanup;
@@ -589,10 +715,10 @@ cleanup:
         free(fileInfo.fileNamePtr);
         fileInfo.fileNamePtr = 0;
     }
-    if (fileInfo.targetPtr)
+    if (fileInfo.targetInfo.filePathPtr)
     {
-        free(fileInfo.targetPtr);
-        fileInfo.targetPtr = 0;
+        free(fileInfo.targetInfo.filePathPtr);
+        fileInfo.targetInfo.filePathPtr = 0;
     }
 
     if (!*isOkPtr)
@@ -812,8 +938,8 @@ jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesList
 
     *isOkPtr = true;
 
-    jlsAlignmentStruct answer = {0};
-    
+    jlsAlignmentStruct answer = jlsAlignmentDefault;
+
     // Объявление переменных, используемых в cleanup
     fileInfoStruct fileInfo = {0};
 
@@ -841,10 +967,10 @@ jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesList
             free(fileInfo.fileNamePtr);
             fileInfo.fileNamePtr = 0;
         }
-        if (fileInfo.targetPtr)
+        if (fileInfo.targetInfo.filePathPtr)
         {
-            free(fileInfo.targetPtr);
-            fileInfo.targetPtr = 0;
+            free(fileInfo.targetInfo.filePathPtr);
+            fileInfo.targetInfo.filePathPtr = 0;
         }
     
         jlsPathAppend(filesList->list[i], &fullPath[0], pathLength, PATH_MAX, isOkPtr);
@@ -853,7 +979,7 @@ jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesList
             goto cleanup;
         }
 
-        fileInfoGet(&fullPath[0], &fileInfo, isOkPtr);
+        fileInfoGet(&fullPath[0], &fileInfo, false, isOkPtr);
         if (!*isOkPtr)
         {
             goto cleanup;
@@ -904,10 +1030,10 @@ cleanup:
         free(fileInfo.fileNamePtr);
         fileInfo.fileNamePtr = 0;
     }
-    if (fileInfo.targetPtr)
+    if (fileInfo.targetInfo.filePathPtr)
     {
-        free(fileInfo.targetPtr);
-        fileInfo.targetPtr = 0;
+        free(fileInfo.targetInfo.filePathPtr);
+        fileInfo.targetInfo.filePathPtr = 0;
     }
     if (*isOkPtr)
     {
@@ -1180,6 +1306,44 @@ size_t jlsMakeStringSafe(const char *stringPtr, char *safePtr, size_t safePtrLen
 /*
     Внутренние функции
 */
+
+static void jlsUpdateMaxVisibleChars(void)
+{
+    uint64_t newMaxVisibleChars = jlsMaxVisibleCharsDefault;
+
+    if (!jlsIsColorModeEnabled)
+    {
+        goto updateMaxVisibleChars;
+    }
+    
+    struct winsize winSize = {0};
+
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &winSize) != -1)
+    {
+        newMaxVisibleChars = winSize.ws_col;
+        goto updateMaxVisibleChars;
+    }
+
+    char *env = getenv("COLUMNS");
+    if (!env)
+    {
+        goto updateMaxVisibleChars;
+    }
+
+    unsigned long long columns = 0;
+    char               *envEnd = 0; 
+
+    columns = strtoull(env, &envEnd, 10);
+    if (env == envEnd || *envEnd != '\0' || errno != 0)
+    {
+        goto updateMaxVisibleChars;
+    }
+
+    newMaxVisibleChars = columns;
+
+updateMaxVisibleChars:
+    jlsMaxVisibleChars = newMaxVisibleChars;
+}
 
 static size_t jlsPathSet(const char *pathPtr, char *bufferPtr, size_t bufferSize, bool *isOkPtr)
 {

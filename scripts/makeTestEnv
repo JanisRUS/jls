@@ -23,6 +23,7 @@ readonly COMMON_LOG="/tmp/$COMMON_SCRIPT_NAME.log"
 # @brief    Список тестов
 readonly COMMON_TESTS_LIST=(SymlinksWithSpaces
                             DifferentAccess
+                            DifferentColors
                             DifferentUIDGID
                             RussianSymbols
                             DifferentTypes
@@ -298,6 +299,118 @@ function makeTestDifferentAccess()
     return 0
 }
 
+# @brief    Функция создания теста "Различные цвета"
+# @details  Данная функция выполняет создание директории с названием DifferentColors
+#               и создает в ней файлы c различными расширениями
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestDifferentColors()
+{
+    local TEST_NAME="DifferentColors"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local LS_COLORS_ARRAY=()
+    local LS_COLOR=""
+
+    IFS=':' read -ra LS_COLORS_ARRAY <<< "$LS_COLORS"
+
+    for LS_COLOR in "${LS_COLORS_ARRAY[@]}"
+    do
+        if [[ "$LS_COLOR" != \*.* ]]
+        then
+            continue;
+        fi
+
+        local FILE=""
+
+        FILE="File$(echo "${LS_COLOR:1}" | cut -d '=' -f1)"
+        if ! truncate -s 0 "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
+# @brief    Функция создания теста "Различные UID:GID"
+# @details  Данная функция выполняет создание директории с названием DifferentUIDGID
+#               и создает в ней файлы и директории с различными UID и GID
+# @return   Возвращает 0 в случае успешного создания теста.
+#               В противном случае, возвращает 1
+function makeTestDifferentUIDGID()
+{
+    local TEST_NAME="DifferentUIDGID"
+
+    echo -n "Creating $TEST_NAME test... "
+
+    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
+    then
+        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
+        return 1
+    fi
+
+    local FILES_LIST=("File_0_0"
+                      "File_1000_1000"
+                      "File_1000_0"
+                      "File_132465_132465"
+                      "File_0_132465"
+                      "File_132465_1000")
+    local FILE=""
+    for FILE in "${FILES_LIST[@]}"
+    do
+        if ! echo "File $FILE" > "$COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+        local NEW_UID="$(echo "$FILE" | cut -d '_' -f2)"
+        local NEW_GID="$(echo "$FILE" | cut -d '_' -f3)"
+        if ! chown "$NEW_UID":"$NEW_GID" "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to change owner of $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
+            return 1
+        fi
+    done
+
+    local DIRECTORIES_LIST=("Directory_0_0"
+                            "Directory_1000_1000"
+                            "Directory_1000_0"
+                            "Directory_543513_543513"
+                            "Directory_0_543513"
+                            "Directory_543513_1000")
+    local DIRECTORY=""
+    for DIRECTORY in "${DIRECTORIES_LIST[@]}"
+    do
+        if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+        local NEW_UID="$(echo "$FILE" | cut -d '_' -f2)"
+        local NEW_GID="$(echo "$FILE" | cut -d '_' -f3)"
+        if ! chown "$NEW_UID":"$NEW_GID" "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
+        then
+            echo "Failed to change owner of $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
+            return 1
+        fi
+    done
+
+    echo "Done"
+
+    return 0
+}
+
 # @brief    Функция создания теста "Файлы с русскими символами в названии"
 # @details  Данная функция выполняет создание директории с названием TestRussianSymbols
 #               и создает в ней файлы и директории, в названии которых есть русские символы
@@ -516,74 +629,6 @@ function makeTestSymlinksBroken()
         if ! ln -s "$FILE" "$COMMON_TESTS_DIR/$TEST_NAME/${FILE}BrokenSymink" >> "$COMMON_LOG" 2>&1
         then
             echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/${FILE}BrokenSymlink"
-            return 1
-        fi
-    done
-
-    echo "Done"
-
-    return 0
-}
-
-# @brief    Функция создания теста "Различные UID:GID"
-# @details  Данная функция выполняет создание директории с названием DifferentUIDGID
-#               и создает в ней файлы и директории с различными UID и GID
-# @return   Возвращает 0 в случае успешного создания теста.
-#               В противном случае, возвращает 1
-function makeTestDifferentUIDGID()
-{
-    local TEST_NAME="DifferentUIDGID"
-
-    echo -n "Creating $TEST_NAME test... "
-
-    if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME" >> "$COMMON_LOG" 2>&1
-    then
-        echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME directory"
-        return 1
-    fi
-
-    local FILES_LIST=("File_0_0"
-                      "File_1000_1000"
-                      "File_1000_0"
-                      "File_132465_132465"
-                      "File_0_132465"
-                      "File_132465_1000")
-    local FILE=""
-    for FILE in "${FILES_LIST[@]}"
-    do
-        if ! echo "File $FILE" > "$COMMON_TESTS_DIR/$TEST_NAME/$FILE"
-        then
-            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
-            return 1
-        fi
-        local NEW_UID="$(echo "$FILE" | cut -d '_' -f2)"
-        local NEW_GID="$(echo "$FILE" | cut -d '_' -f3)"
-        if ! chown "$NEW_UID":"$NEW_GID" "$COMMON_TESTS_DIR/$TEST_NAME/$FILE" >> "$COMMON_LOG" 2>&1
-        then
-            echo "Failed to change owner of $COMMON_TESTS_DIR/$TEST_NAME/$FILE"
-            return 1
-        fi
-    done
-
-    local DIRECTORIES_LIST=("Directory_0_0"
-                            "Directory_1000_1000"
-                            "Directory_1000_0"
-                            "Directory_543513_543513"
-                            "Directory_0_543513"
-                            "Directory_543513_1000")
-    local DIRECTORY=""
-    for DIRECTORY in "${DIRECTORIES_LIST[@]}"
-    do
-        if ! mkdir "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
-        then
-            echo "Failed to create $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
-            return 1
-        fi
-        local NEW_UID="$(echo "$FILE" | cut -d '_' -f2)"
-        local NEW_GID="$(echo "$FILE" | cut -d '_' -f3)"
-        if ! chown "$NEW_UID":"$NEW_GID" "$COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY" >> "$COMMON_LOG" 2>&1
-        then
-            echo "Failed to change owner of $COMMON_TESTS_DIR/$TEST_NAME/$DIRECTORY"
             return 1
         fi
     done

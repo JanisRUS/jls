@@ -1,17 +1,17 @@
 /// @file       fileInfo.h
 /// @brief      Файл с объявлениями модуля получения данных о файле
-/// @details    Порядок работы с модулем:<br>
-///                 1) fileInfoIsExists() для проверки существования файла<br>
-///                 2) fileInfoGet() для получения всей информации о файле<br>
-///                 3) fileInfoSetActiveFile() для установки активного файла<br>
-///                 4) fileInfoClearActiveFile() для сброса активного файла<br>
-///                 5) Функции с префиксом fileInfoGet для получения информации об активном файле<br>
-///                 6) fileInfoToString() для получения строкового представления всей информации о файле<br>
+/// @details    Порядок работы с модулем: <br>
+///                 1) fileInfoIsExists() для проверки существования файла <br>
+///                 2) fileInfoGet() для получения всей информации о файле <br>
+///                 3) fileInfoSetActiveFile() для установки активного файла <br>
+///                 4) fileInfoClearActiveFile() для сброса активного файла <br>
+///                 5) Функции с префиксом fileInfoGet для получения информации об активном файле <br>
+///                 6) fileInfoToString() для получения строкового представления всей информации о файле <br>
 ///                 7) Функции с префиксом fileInfoToString для получения строкового представления информации о файле
 /// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #ifndef _FILE_INFO_H_
-#define _FILE_INFO_H
+#define _FILE_INFO_H_
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -44,7 +44,7 @@ typedef enum fileInfoTypesEnum
     fileInfoTypeLink,        ///< Символическая ссылка
     fileInfoTypeSock,        ///< Сокет
     fileInfoTypeCount        ///< Количество типов файлов
-} fileInfoTypesEnum;
+}fileInfoTypesEnum;
 
 /*
     Структуры
@@ -59,7 +59,7 @@ typedef struct fileInfoAccessBitsStruct
     uint8_t execute : 1; ///< Доступ на исполнение
     uint8_t write   : 1; ///< Доступ на запись
     uint8_t read    : 1; ///< Доступ на чтение
-} fileInfoAccessBitsStruct;
+}fileInfoAccessBitsStruct;
 
 /// @brief      Объединение доступа к файлу
 typedef union fileInfoAccessUnion
@@ -74,7 +74,17 @@ typedef struct fileInfoAccessStruct
     fileInfoAccessUnion owner; ///< Доступ владельца
     fileInfoAccessUnion group; ///< Доступ группы
     fileInfoAccessUnion other; ///< Доступ прочих
-} fileInfoAccessStruct;
+}fileInfoAccessStruct;
+
+/// @brief      Структура информации о цели
+typedef struct fileInfoTargetStruct
+{
+    fileInfoTypesEnum    type;           ///< Тип файла
+    fileInfoAccessStruct access;         ///< Права доступа
+    char                *filePathPtr;    ///< Указатель на строку с полным путем к файлу
+    char                *fileNamePtr;    ///< Указатель на позицию имени файла в filePathPtr
+    bool                 isTargetExists; ///< Флаг существования цели ссылки
+}fileInfoTargetStruct;
 
 /// @brief      Структура информации о файле
 typedef struct fileInfoStruct
@@ -87,13 +97,10 @@ typedef struct fileInfoStruct
     int64_t              size;           ///< Размер файла
     time_t               timeEdit;       ///< Время последнего изменения файла
     char                *fileNamePtr;    ///< Указатель на строку с именем файла
-    size_t               fileNameLength; ///< Длина fileNamePtr
-    char                *targetPtr;      ///< Указатель на строку с путем к цели ссылки
-    size_t               targetLength;   ///< Длина targetPtr
-    bool                 isTargetExists; ///< Флаг существования цели ссылки
+    fileInfoTargetStruct targetInfo;     ///< Информация о цели ссылки
     int64_t              blocks;         ///< Количество занимаемых файлом 512 байтовых блоков
     __uint64_t           deviceNumber;   ///< Номер устройства
-} fileInfoStruct;
+}fileInfoStruct;
 
 #pragma pack (pop)
 
@@ -113,12 +120,13 @@ bool fileInfoIsExists(const char *filePtr, bool *isOkPtr);
 /// @details    Данная функция выполняет вызов fileInfoSetActiveFile() с filePtr в качестве аргумента,
 ///                 затем последовательно заполняет структуру fileInfoPtr,
 ///                 выполняя вызовы соответствующих fileInfoGet функций
-/// @param[in]  filePtr     Указатель на путь к файлу
-/// @param[out] fileInfoPtr Указатель на информацию о файле
-/// @param[out] isOkPtr     Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @warning    Для инициализации filePtr и targetPtr используется malloc!
+/// @param[in]  filePtr      Указатель на путь к файлу
+/// @param[out] fileInfoPtr  Указатель на информацию о файле
+/// @param[in]  isFollowLink Флаг следования по ссылке до конца
+/// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
+/// @warning    Для инициализации fileNamePtr и targetInfo.filePathPtr используется malloc!
 ///                 Не забудьте очистить память при удалении fileInfoPtr, если функция вернула true!
-void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool *isOkPtr);
+void fileInfoGet(const char *filePtr, fileInfoStruct *fileInfoPtr, bool isFollowLink, bool *isOkPtr);
 
 /// @brief      Функция установки активного файла
 /// @details    Данная функция выполняет запись filePtr и полученных при помощи lstat() данных в 
@@ -193,7 +201,7 @@ time_t fileInfoGetTimeEdit(bool *isOkPtr);
 /// @param[out] stringPtr     Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength  Длина строки stringPtr
 /// @param[out] isOkPtr       Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoGetLinkTarget(char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения количества занимаемых блоков
@@ -215,7 +223,7 @@ uint32_t fileInfoGet512BytesBlocks(bool *isOkPtr);
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления типа файла
@@ -225,7 +233,7 @@ size_t fileInfoToString(const fileInfoStruct *fileInfoPtr, char *stringPtr, size
 /// @warning    Длина stringPtr должна быть хотя бы 2 байта. 1 на символ типа и 1 под \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringType(fileInfoTypesEnum type, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления структуры доступа к файлу
@@ -236,7 +244,7 @@ size_t fileInfoToStringType(fileInfoTypesEnum type, char *stringPtr, size_t stri
 /// @warning    Длина stringPtr должна быть хотя бы 10 байт. 9 на биты доступа и 1 под \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTypesEnum type, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового количества жестких ссылок на файл
@@ -245,7 +253,7 @@ size_t fileInfoToStringAccess(const fileInfoAccessStruct *accessPtr, fileInfoTyp
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringLinksCount(uint32_t linksCount, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления Id владельца файла
@@ -254,7 +262,7 @@ size_t fileInfoToStringLinksCount(uint32_t linksCount, char *stringPtr, size_t s
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringOwnerId(uint32_t ownerId, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления Id группы файла
@@ -263,7 +271,7 @@ size_t fileInfoToStringOwnerId(uint32_t ownerId, char *stringPtr, size_t stringL
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового размера файла
@@ -272,7 +280,7 @@ size_t fileInfoToStringGroupId(uint32_t groupId, char *stringPtr, size_t stringL
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового размера файла
@@ -281,7 +289,7 @@ size_t fileInfoToStringSize(uint32_t size, char *stringPtr, size_t stringLength,
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringDeviceNumber(__uint64_t deviceNumber, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 /// @brief      Функция получения строкового представления времени последнего изменения файла
@@ -290,7 +298,7 @@ size_t fileInfoToStringDeviceNumber(__uint64_t deviceNumber, char *stringPtr, si
 /// @param[out] stringPtr    Указатель на строку, куда будет записан результат с \0
 /// @param[in]  stringLength Длина строки stringPtr
 /// @param[out] isOkPtr      Указатель на флаг успешного выполнения операции. Может быть равен 0
-/// @return     Возвращает количество записанных данных в stringPtr
+/// @return     Возвращает длинну stringPtr
 size_t fileInfoToStringTimeEdit(time_t timeEdit, char *stringPtr, size_t stringLength, bool *isOkPtr);
 
 // _FILE_INFO_H_

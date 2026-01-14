@@ -2,7 +2,8 @@
 
 # @file     makeTests
 # @brief    Скрипт проведения тестов для проверки утилиты jls
-# @param    arg  Путь до jls
+# @param    COMMON_JlS    Путь до jls
+# @param    DESIRED_TESTS Список желаемых тестов. Если пуст, будут выполнены все тесты из <COMMON_TESTS_DIR>
 
 #
 # Константы
@@ -18,7 +19,7 @@ readonly COMMON_SCRIPT_NAME="$(basename "$0")"
 readonly COMMON_TESTS_DIR="$COMMON_SCRIPT_DIR/../tests"
 
 # @brief    Путь до утилиты jls
-readonly COMMON_JLS="$1"
+readonly COMMON_JLS="$1"; shift
 
 # @brief    Режимы запуска jls и ls
 readonly COMMON_MODES_LIST=("Terminal"
@@ -62,8 +63,11 @@ COMMON_MODE="${COMMON_MODES_LIST[0]}"
 #
 
 # @brief    Точка входа в скрипт
+# @param    DESIRED_TESTS Список желаемых тестов. Если пуст, будут выполнены все тесты из <COMMON_TESTS_DIR>
 function main()
 {
+    local DESIRED_TESTS=("$@")
+
     if ! prepare
     then
         return 1
@@ -85,11 +89,37 @@ function main()
             local TEST="${COMMON_TESTS_ARGS_LIST[$i]}"
             local ARG="${COMMON_TESTS_ARGS_LIST[$i + 1]}"
 
-            TESTS_RESULT_LIST+=("${TEST} ${COMMON_MODE} Compare")
-            performCompareTest "${TEST}${COMMON_MODE}Compare" "$ARG"
-            TESTS_RESULT_LIST+=("$?")
+            local IS_COMPARE_DESIRED=0
+            local IS_MEMLEAK_DESIRED=0
 
-            if [ $COMMON_IS_VALGRIND_EXISTS -eq 1 ]
+            if [[ "${#DESIRED_TESTS[@]}" -ne 0 ]]
+            then                
+                local DESIRED_TEST=""
+                for DESIRED_TEST in "${DESIRED_TESTS[@]}"
+                do
+                    if [ "$DESIRED_TEST" == "${TEST}${COMMON_MODE}Compare" ]
+                    then
+                        IS_COMPARE_DESIRED=1
+                    fi
+
+                    if [ "$DESIRED_TEST" == "${TEST}${COMMON_MODE}MemoryLeak" ]
+                    then
+                        IS_MEMLEAK_DESIRED=1
+                    fi
+                done
+            else
+                IS_COMPARE_DESIRED=1
+                IS_MEMLEAK_DESIRED=1
+            fi
+
+            if [[ "$IS_COMPARE_DESIRED" == "1" ]]
+            then
+                TESTS_RESULT_LIST+=("${TEST} ${COMMON_MODE} Compare")
+                performCompareTest "${TEST}${COMMON_MODE}Compare" "$ARG"
+                TESTS_RESULT_LIST+=("$?")
+            fi
+
+            if [[ "$COMMON_IS_VALGRIND_EXISTS" == "1" && "$IS_MEMLEAK_DESIRED" == "1" ]]
             then
                 TESTS_RESULT_LIST+=("${TEST} ${COMMON_MODE} MemoryLeak")
                 performMemoryLeakTest "${TEST}${COMMON_MODE}MemoryLeak" "$ARG"
@@ -244,7 +274,7 @@ function prepare()
 
     # Тест с несколькими аргументами
     COMMON_TESTS_ARGS_LIST+=("FewArguments")
-    COMMON_TESTS_ARGS_LIST+=("NonExistent1 $COMMON_SCRIPT_DIR/$COMMON_SCRIPT_NAME $COMMON_SCRIPT_DIR NonExistent2 NonExistent3")
+    COMMON_TESTS_ARGS_LIST+=("NonExistent1 $COMMON_SCRIPT_DIR/$COMMON_SCRIPT_NAME $COMMON_SCRIPT_DIR /usr/bin/echo NonExistent2 NonExistent3")
 
     local TEST=""
     for TEST in "${TESTS_LIST_SORTED[@]}"
@@ -344,8 +374,8 @@ function performCompareTest()
     local LS_MODE=""
     if [ "$COMMON_MODE" == "${COMMON_MODES_LIST[0]}" ]
     then
-        JLS_MODE+="--safe-mode "
-        LS_MODE+="--quoting-style=shell "
+        JLS_MODE+="--safe-mode --color-mode"
+        LS_MODE+="--quoting-style=shell --color=always"
     fi
 
     /usr/bin/time -q -f "uptime=%e sec | peak-memory=%M KiB" -o "$TMP_FILE" "$COMMON_JLS" $JLS_MODE $ARG >> "$JLS_OUTPUT_FILE" 2>&1
@@ -453,5 +483,5 @@ function performMemoryLeakTest()
 # Точка входа в скрипт
 #
 
-main
+main "$@"
 exit $?
