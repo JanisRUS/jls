@@ -1,5 +1,5 @@
 /// @file       color.c
-/// @brief      См. colors.h
+/// @brief      См. color.h
 /// @author     Тузиков Г.А. janisrus35@gmail.com
 
 #include "color.h"

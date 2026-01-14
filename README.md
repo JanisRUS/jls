@@ -1,4 +1,4 @@
-<img title="" src="resources/icon.png" alt="icon.png" data-align="center" width="500">
+<img title="" src="resources/icon.png" alt="" data-align="center" width="500">
 
 ## Описание
 
@@ -132,5 +132,3 @@ make tests
 ## TODO
 
 - Сделать вывод \033[K идентичным `ls`.
-
-- 
