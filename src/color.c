@@ -199,7 +199,7 @@ colorFileTargetStruct colorFileToESC(const fileInfoStruct *fileInfoPtr, bool *is
         return (colorFileTargetStruct){0};
     }
 
-    if (fileInfoPtr->type == fileInfoTypeLink)
+    if (fileInfoPtr->type == fileInfoTypeLink && fileInfoPtr->targetInfo.isTargetExists)
     {
         key  = colorGetKey(fileInfoPtr->targetInfo.fileNamePtr, fileInfoPtr->targetInfo.type, &fileInfoPtr->targetInfo.access, fileInfoPtr->targetInfo.isTargetExists);
         ansi = colorGetAnsi(key);
@@ -308,7 +308,7 @@ static const char *colorGetKey(const char *fileNamePtr, fileInfoTypesEnum type, 
     {
         const char *pattern = colorList[i].key;
 
-        if (strlen(pattern) < 2 || strcmp(pattern, "*.") != 0)
+        if (strlen(pattern) < 2 || strncmp(pattern, "*.", strlen("*.")) != 0)
         {
             continue;
         }

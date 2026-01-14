@@ -77,7 +77,7 @@ const char *jlsResetColorESC = "";
 /// @brief      Отпуступы по умолчанию
 const jlsAlignmentStruct jlsAlignmentDefault = 
 {
-    .linksCount = 2,
+    .linksCount = 1,
     .owner      = 0,
     .group      = 0,
     .size       = 4
