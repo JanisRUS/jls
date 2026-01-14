@@ -101,7 +101,7 @@ bool jlsIsColorModeEnabled = false;
     Функции
 */
 
-int jls(const char *filePtr)
+int jls(const char *filePtr, const jlsAlignmentStruct *alignmentPtr, jlsSafeTypesEnum safeType)
 {
     static char    fileInfoString[JLS_FILE_INFO_MAX_LENGTH] = {0};
     static size_t  fileInfoStringLength = 0;
@@ -111,6 +111,11 @@ int jls(const char *filePtr)
     // Объявление переменных, используемых в cleanup
     fileInfoStruct      fileInfo   = {0};
     jlsCommonInfoStruct commonInfo = {0};
+
+    if (!alignmentPtr)
+    {
+        alignmentPtr = &jlsAlignmentDefault;
+    }
 
     if (!filePtr)
     {
@@ -156,34 +161,6 @@ int jls(const char *filePtr)
         fileInfoStringLength = fileInfoToString(&fileInfo, &fileInfoString[0], JLS_FILE_INFO_MAX_LENGTH, &isOk);
         if (isOk)
         {
-            bool             isFileUnsafe   = false;
-            bool             isTargetUnsafe = false;
-            jlsSafeTypesEnum safeType       = jlsSafeTypeNone;
-
-            isFileUnsafe = jlsCheckIsUnsafe(fileInfo.fileNamePtr, &isOk);
-            if (!isOk)
-            {
-                goto cleanup;
-            }
-
-            if (fileInfo.type == fileInfoTypeLink)
-            {
-                isTargetUnsafe = jlsCheckIsUnsafe(fileInfo.targetInfo.fileNamePtr, &isOk);
-                if (!isOk)
-                {
-                    goto cleanup;
-                }
-            }
-
-            if (isFileUnsafe)
-            {
-                safeType += jlsSafeTypeName;
-            }
-            if (isTargetUnsafe)
-            {
-                safeType += jlsSafeTypeTarget;
-            }
-
             colorFileTargetStruct colors = {0};
 
             if (jlsIsColorModeEnabled)
@@ -195,7 +172,7 @@ int jls(const char *filePtr)
                 }
             }
 
-            jlsPrintFileInfo(&fileInfoString[0], 0, safeType, &colors, &isOk);
+            jlsPrintFileInfo(&fileInfoString[0], alignmentPtr, safeType, &colors, &isOk);
             goto cleanup;
         }
         goto cleanup;
@@ -541,7 +518,7 @@ jlsCommonInfoStruct jlsGetCommonInfo(const char *dirPtr, bool *isOkPtr)
         goto cleanup;
     }
 
-    answer.files.list = calloc(answer.files.count, sizeof(char *));
+    answer.files.list = calloc(answer.files.count, sizeof(answer.files.list));
     if (!answer.files.list)
     {
         *isOkPtr = false;
@@ -961,7 +938,7 @@ jlsAlignmentStruct jlsCalculateAlignment(const char *pathPtr, const jlsFilesList
 
     *isOkPtr = true;
 
-    jlsAlignmentStruct answer = {0};
+    jlsAlignmentStruct answer = jlsAlignmentDefault;
 
     // Объявление переменных, используемых в cleanup
     fileInfoStruct fileInfo = {0};
