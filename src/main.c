@@ -18,11 +18,10 @@ int main(int argc, char *argv[])
 
     setlocale(LC_ALL, "");
     
-    char **filesList = 0;
-    int   filesCount = 0;
-
-    char **dirsList  = 0;
-    int   dirsCount  = 0;
+    // Объявление переменных, используемых в cleanup
+    jlsFilesListStruct jlsFilesList = {0};
+    char             **filesList    = 0;
+    char             **dirsList     = 0;
 
     /*
         Параметры ПО
@@ -108,7 +107,7 @@ int main(int argc, char *argv[])
 
     if (filesIndex == -1)
     {
-        if (jls(".") != 0)
+        if (jls(".", 0, jlsSafeTypeNone) != 0)
         {
             isOk = false;
         }
@@ -116,9 +115,10 @@ int main(int argc, char *argv[])
     }
 
     /*
-        Запуск с файлами в аргументах
+        Формирование списка файлов и директорий, вывод информации о несуществующих файлах/директориях
     */
-
+       
+    int filesCount = 0;
     filesList = calloc(argc - filesIndex, sizeof(char *));
     if (!filesList)
     {
@@ -126,6 +126,8 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
+
+    int dirsCount = 0;
     dirsList = calloc(argc - filesIndex, sizeof(char *));
     if (!dirsList)
     {
@@ -163,14 +165,49 @@ int main(int argc, char *argv[])
         }
     }
 
+    /*
+        Вывод информации о файлах
+    */
+
+    jlsFilesList.count = filesCount;
+    jlsFilesList.list  = calloc(filesCount, sizeof(jlsFilesList.list));
+    if (!jlsFilesList.list)
+    {
+        isOk = false;
+        goto cleanup;
+    }
+
     for (int i = 0; i < filesCount; ++i)
     {
-        if (jls(filesList[i]) != 0)
+        jlsFilesList.list[i] = filesList[i];
+    }
+
+    jlsAlignmentStruct alignment = {0};
+    alignment = jlsCalculateAlignment("", &jlsFilesList, &isOk);
+    if (!isOk)
+    {
+        goto cleanup;
+    }
+
+    jlsSafeTypesEnum safeType = {0};
+    safeType = jlsCalculateSafeType("", &jlsFilesList, &isOk);
+    if (!isOk)
+    {
+        goto cleanup;
+    }
+
+    for (int i = 0; i < filesCount; ++i)
+    {
+        if (jls(filesList[i], &alignment, safeType) != 0)
         {
             isOk = false;
             goto cleanup;
         }
     }
+
+    /*
+        Вывод информации о директориях
+    */
 
     for (int i = 0; i < dirsCount; ++i)
     {
@@ -179,7 +216,7 @@ int main(int argc, char *argv[])
             printf("\n%s:\n", dirsList[i]);
         }
 
-        if (jls(dirsList[i]) != 0)
+        if (jls(dirsList[i], 0, jlsSafeTypeNone) != 0)
         {
             isOk = false;
             goto cleanup;
@@ -197,6 +234,12 @@ cleanup:
     {
         free(dirsList);
         dirsList = 0;
+    }
+
+    if (jlsFilesList.list)
+    {
+        free(jlsFilesList.list);
+        jlsFilesList.list = 0;
     }
 
     fileInfoClearActiveFile();

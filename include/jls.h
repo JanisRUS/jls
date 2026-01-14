@@ -90,10 +90,13 @@ typedef struct jlsCommonInfoStruct
 /// @details    Данная функция выполняет получение информации о файле filePtr.
 ///                 Если filePtr - регулярный файл, выводит о нем информацию.
 ///                 Если filePtr - директория, последовательно выводит о информацию о каждом файле в ней
-/// @param[in]  filePtr Указатель на файл
+/// @param[in]  filePtr      Указатель на файл
+/// @param[in]  alignmentPtr Указатель на структуру максимальных размеров полей информации о файле. Может быть равен 0
+/// @param[in]  safeType     Тип безопасного режима
+/// @warning    Значения alignmentPtr и safeType используются только если filePtr - регулярный файл
 /// @return     Возвращает 0 в случае успешного выполнения функции.
 ///                 В противном случае, возвращет 1
-int jls(const char *filePtr);
+int jls(const char *filePtr, const jlsAlignmentStruct *alignmentPtr, jlsSafeTypesEnum safeType);
 
 /// @brief      Функция вывода информации о файле
 /// @details    Данная функция выпоняет вывод fileInfoStringPtr с учетом значений из alignmentPtr
